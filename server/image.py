@@ -23,7 +23,7 @@ class ImageUploader:
         self.g = Github(github_token)
         self.repo = self.g.get_repo(repo_name)
         self.branch = branch
-        self.cdn_base_url = f"https://image-sh.jsdmirror.com/gh/{repo_name}@{branch}"
+        self.cdn_base_url = f"https://image.hoyue.fun"
 
     def upload(self, 
                     image: Union[str, bytes, BinaryIO],
@@ -79,13 +79,13 @@ class ImageUploader:
         except Exception as e:
             raise Exception(f"Failed to upload image: {str(e)}")
 
-def image_upload(image_data: Union[str, bytes, BinaryIO], folder: str = "images") -> str:
+def image_upload(image_data: Union[str, bytes, BinaryIO], folder: str = os.getenv('GITHUB_DEFAULT_FOLDER', "imgup/23")) -> str:
     """
     Upload image to GitHub repository and return CDN URL
     
     Args:
         image_data: Can be file path (str), bytes data, or file-like object
-        folder: Target folder in repository, default is "images"
+        folder: Target folder in repository, default is defined in GITHUB_DEFAULT_FOLDER
         
     Returns:
         str: CDN URL of the uploaded image
