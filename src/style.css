@@ -1,0 +1,101 @@
+/* src/style.css */
+html, body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+}
+h2 {
+  color: #333;
+  text-align: center;
+  margin-top: 20px;
+}
+h3 {
+  color: #555;
+  margin-bottom: 10px;
+}
+div {
+  background-color: #fff;
+  border-radius: 8px;
+  margin: 20px auto;
+  padding: 20px;
+  max-width: 800px;
+}
+button {
+  background-color: #007bff;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  padding: 10px 20px;
+  font-size: 16px;
+  margin: 10px;
+  display: inline-block;
+}
+button:hover {
+  background-color: #0056b3;
+}
+input[type="color"] {
+  margin: 10px;
+  padding: 5px;
+  border: none;
+  cursor: pointer;
+  background-color: #ffffff;
+  border-radius: 4px;
+  width: 40px;
+  height: 40px;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+input {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  width: calc(100% - 22px);
+  margin-bottom: 10px;
+}
+p {
+  color: #007bff;
+  font-weight: bold;
+}
+.main-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+.game-container {
+  display: flex;
+  justify-content: space-between;
+  padding: 0px;
+  box-sizing: border-box;
+}
+.canvas-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 0px;
+  background-color: transparent; /* 设置背景透明 */
+  border: none; /* 无边框 */
+}
+.sidebar {
+  width: 600px;
+}
