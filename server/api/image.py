@@ -14,26 +14,26 @@ async def upload_image(
     file: UploadFile = File(...),
     folder: Optional[str] = None
 ):
-    """上传图片到GitHub并返回CDN URL
+    """Upload image to GitHub and return CDN URL
     
     Args:
-        file: 上传的图片文件
-        folder: 可选的目标文件夹
+        file: UploadFile, the image file to upload
+        folder: Optional[str], the target folder, default is "imgup/23"
         
     Returns:
-        包含CDN URL的响应
+        ImageResponse, include CDN URL
         
     Raises:
-        HTTPException: 上传失败时抛出
+        HTTPException: Upload failed
     """
     try:
-        # 读取文件内容
+        # Read file content
         content = await file.read()
         
-        # 如果没有指定folder，使用默认值
+        # If no folder is specified, use the default value
         target_folder = folder or os.getenv('GITHUB_DEFAULT_FOLDER', "imgup/23")
         
-        # 上传图片
+        # Upload image
         url = image_upload(
             image_data=content,
             folder=target_folder
