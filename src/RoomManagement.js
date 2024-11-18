@@ -6,8 +6,9 @@ const RoomManagement = () => {
     const [roomId, setRoomId] = useState('');
     const [password, setPassword] = useState('');
     const [createPassword, setCreatePassword] = useState('');
-    const [painterNickname, setPainterNickname] = useState(''); // 新增昵称状态
-    const [viewerNickname, setViewerNickname] = useState(''); // 新增昵称状态
+    const [painterNickname, setPainterNickname] = useState(''); // 创建房间玩家的昵称
+    const [viewerNickname, setViewerNickname] = useState(''); // 加入房间玩家的昵称
+    const [maxPlayers, setMaxPlayers] = useState(3); // 最大玩家数量
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -25,15 +26,38 @@ const RoomManagement = () => {
         };
     }, []);
 
-    const handleCreateRoom = () => {
+    const handleCreateRoom = async () => {
         if (createPassword && painterNickname) {
-            const generatedRoomId = Math.floor(1000 + Math.random() * 9000).toString();
-            setRoomId(generatedRoomId);
-            setPassword(createPassword);
-            console.log(`Creating room ${generatedRoomId} with nickname ${painterNickname}`);
-            navigate(`/draw/${generatedRoomId}`, { state: { roomId: generatedRoomId, password: createPassword,  nickname: painterNickname} });
+            try {
+                // 调用服务器端的create-room接口
+                const response = await fetch('http://localhost:3001/create-room', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ maxPlayers }),
+                });
+
+                if (response.ok) {
+                    const { roomId } = await response.json();
+                    console.log(`Creating room ${roomId} with nickname ${painterNickname} and max players ${maxPlayers}`);
+                    navigate(`/draw/${roomId}`, { 
+                        state: { 
+                            roomId, 
+                            password: createPassword,  
+                            nickname: painterNickname, 
+                            maxPlayers
+                        } 
+                    });
+                } else {
+                    throw new Error('Failed to create room');
+                }
+            } catch (error) {
+                console.error('Error creating room:', error);
+                alert('Failed to create room. Please try again.');
+            }
         } else {
-            alert('Password and Nickname is required');
+            alert('Password and Nickname are required');
         }
     };
 
@@ -62,6 +86,17 @@ const RoomManagement = () => {
                 onChange={(e) => setPainterNickname(e.target.value)}
                 placeholder="Enter your nickname"
             />
+            <label className="max-players-label">Maximum Players:
+                <select
+                    id="maxPlayers"
+                    value={maxPlayers}
+                    onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
+                >
+                    {[3, 4, 5, 6, 7, 8].map(num => (
+                        <option key={num} value={num}>{num}</option>
+                    ))}
+                </select>
+            </label>
             <button onClick={handleCreateRoom}>Create Room</button>
             <h3>Join Room</h3>
             <input
@@ -81,7 +116,7 @@ const RoomManagement = () => {
                 value={viewerNickname}
                 onChange={(e) => setViewerNickname(e.target.value)}
                 placeholder="Enter your nickname"
-            />
+            />            
             <button onClick={handleJoinRoom}>Join Room</button>
         </div>
     );

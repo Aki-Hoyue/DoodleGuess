@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import './style.css';
 
@@ -13,7 +13,8 @@ const DrawingCanvas = () => {
     const [keyword, setKeyword] = useState('');
     const [players, setPlayers] = useState([]);
     const location = useLocation();
-    const { roomId, password, nickname } = location.state || {};
+    const navigate = useNavigate(); 
+    const { roomId, password, nickname, maxPlayers } = location.state || {};
 
     useEffect(() => {
         console.log('DrawingCanvas 组件已挂载');
@@ -28,7 +29,7 @@ const DrawingCanvas = () => {
         if (roomId && nickname) {
             // 加入房间并添加自己到玩家列表
             console.log(`Joining room ${roomId} with nickname ${nickname}`);
-            socket.emit('join room', { roomId, nickname });            
+            socket.emit('join room', { roomId, nickname, maxPlayers });            
         }
 
         socket.on('update players', (updatedPlayers) => {
@@ -48,13 +49,13 @@ const DrawingCanvas = () => {
             }
             // 离开房间
             if (roomId) {
-                console.log(`Leaving room ${roomId} with nickname ${nickname}`);
+                console.log(`Leaving room ${roomId} with nickname ${nickname} and max players ${maxPlayers}`);
                 socket.emit('leave room', roomId, nickname);
             }
             // 断开 socket 连接
             socket.disconnect();
         };
-    }, [roomId, nickname]);
+    }, [roomId, nickname, maxPlayers]);
 
     const getMousePos = (canvas, evt) => {
         const rect = canvas.getBoundingClientRect();
@@ -103,32 +104,29 @@ const DrawingCanvas = () => {
     const handleConfirm = async () => {
         if (keyword.trim()) {
             const canvas = canvasRef.current;
-            const dataURL = canvas.toDataURL('image/png'); 
-            // 将 base64 字符串转换为 Blob
-            const blob = await (await fetch(dataURL)).blob();
-
-            // 创建 FormData 对象
-            const formData = new FormData();
-            formData.append('image', blob, `drawing_${roomId}_${Date.now()}.png`);
+            const imageData = canvas.toDataURL('image/png'); // 定义 imageData            
 
             try {
                 // 调用后端 API 上传图片
-                const response = await fetch('http://localhost:3000/upload-image', {
+                const response = await fetch('http://localhost:3001/upload-drawing', {
                     method: 'POST',
-                    body: formData,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ roomId, imageData, keyword: keyword.trim() }),
                 });
 
                 if (response.ok) {
-                    const result = await response.json();
-                    const imageUrl = result.url; 
-                    socket.emit('submit drawing', { roomId, keyword: keyword.trim(), drawing: dataURL });
-                    setKeyword('');
+                    const { imageUrl, aiProcessingResult } = await response.json();                       
                     // 清空画布
                     const ctx = canvas.getContext('2d');
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    alert('图片已上传成功');
+                    // 跳转到 Judge 页面
+                    navigate('/judge', { state: { roomId, keyword: keyword.trim(),  imageUrl, aiProcessingResult} });
+
+                    alert('图片和关键词已上传成功');
                 } else {
                     throw new Error('图片上传失败1');
                 }
@@ -137,7 +135,6 @@ const DrawingCanvas = () => {
                 alert('图片上传失败2: ' + error.message);
             }
         }
-
         else{
             alert('Please enter a keyword');
         }

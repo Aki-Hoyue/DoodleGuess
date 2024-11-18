@@ -99,3 +99,17 @@ canvas {
 .sidebar {
   width: 600px;
 }
+.max-players-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+.max-players-label select {
+  margin-left: 10px;
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: calc(100% - 32px);
+}

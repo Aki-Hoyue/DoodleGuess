@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-route
 import DrawingCanvas from './DrawingCanvas';
 import Viewer from './Viewer';
 import RoomManagement from './RoomManagement';
+import Judge from './Judge';
 
 // 滚动恢复组件
 function ScrollToTop() {
@@ -29,6 +30,10 @@ function App() {
           <Route 
             path="/view/:roomId" 
             element={<Viewer key={window.location.pathname} />} 
+          />
+          <Route 
+            path="/judge" 
+            element={<Judge />} 
           />
         </Routes>
     </Router>
