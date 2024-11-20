@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client';
 import './style.css';
+
+const socket = io('http://localhost:3001');
 
 const RoomManagement = () => {
     const [roomId, setRoomId] = useState('');
@@ -15,47 +18,33 @@ const RoomManagement = () => {
         // 组件挂载时的逻辑
         console.log('RoomManagement 组件已挂载');
 
+        socket.on('room created', ({ roomId, players, drawer }) => {
+            console.log(`Room created with ID: ${roomId}, players:`, players);
+            navigate(`/draw/${roomId}`, { 
+                state: { 
+                    roomId, 
+                    password: createPassword,  
+                    nickname: painterNickname, 
+                    maxPlayers,
+                    role: 'drawer',
+                    players: players
+                } 
+            });
+        });
+
         return () => {
-            // 组件卸载时的清理逻辑
-            console.log('RoomManagement 组件即将卸载');
-            setRoomId('');
-            setPassword('');
-            setCreatePassword('');
-            setPainterNickname('');
-            setViewerNickname('');   
+            socket.off('room created');
         };
-    }, []);
+    }, [createPassword, painterNickname, maxPlayers, navigate]);
 
     const handleCreateRoom = async () => {
         if (createPassword && painterNickname) {
-            try {
-                // 调用服务器端的create-room接口
-                const response = await fetch('http://localhost:3001/create-room', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ maxPlayers }),
-                });
-
-                if (response.ok) {
-                    const { roomId } = await response.json();
-                    console.log(`Creating room ${roomId} with nickname ${painterNickname} and max players ${maxPlayers}`);
-                    navigate(`/draw/${roomId}`, { 
-                        state: { 
-                            roomId, 
-                            password: createPassword,  
-                            nickname: painterNickname, 
-                            maxPlayers
-                        } 
-                    });
-                } else {
-                    throw new Error('Failed to create room');
-                }
-            } catch (error) {
-                console.error('Error creating room:', error);
-                alert('Failed to create room. Please try again.');
-            }
+            console.log(`Creating room with nickname ${painterNickname}`);
+            socket.emit('create room', { 
+                password: createPassword,
+                maxPlayers, 
+                creatorNickname: painterNickname 
+            });
         } else {
             alert('Password and Nickname are required');
         }
@@ -63,11 +52,33 @@ const RoomManagement = () => {
 
     const handleJoinRoom = () => {
         if (roomId && password && viewerNickname) {
-            console.log(`Joining room ${roomId} with nickname ${viewerNickname}`);
-            navigate(`/view/${roomId}`, { state: { roomId, nickname: viewerNickname } });
+            socket.emit('check password and nickname', { roomId, password, nickname: viewerNickname });
+            
+            socket.on('incorrect password', () => {
+                alert('Incorrect password.');
+            });
+
+            socket.on('duplicate nickname', () => {
+                alert('Nickname already taken.');
+            });    
+
+            socket.on('password and nickname valid', () => {
+
+                console.log(`Joining room ${roomId} with nickname ${viewerNickname}`);
+                socket.emit('join room', { roomId, password, nickname: viewerNickname, role: 'guesser' });
+
+                socket.on('room full', () => {
+                    alert('The room is full.');
+                });
+
+                socket.on('room joined', (roomInfo) => {
+                    console.log('Joined room:', roomInfo);
+                    navigate(`/view/${roomId}`, { state: { roomId, password, nickname: viewerNickname } });
+                });
+            });
         } else {
             alert('Please enter both Room ID, Password and Nickname');
-        }       
+        }          
     };
 
     return (

@@ -12,12 +12,16 @@ const DrawingCanvas = () => {
     const [isErasing, setIsErasing] = useState(false);
     const [keyword, setKeyword] = useState('');
     const [players, setPlayers] = useState([]);
+    const [brushSize, setBrushSize] = useState(2);
+    const [currentDrawer, setCurrentDrawer] = useState('');
+    const [isDrawer, setIsDrawer] = useState(false);
     const location = useLocation();
     const navigate = useNavigate(); 
-    const { roomId, password, nickname, maxPlayers } = location.state || {};
+    const { roomId, password, nickname, role, players: initialPlayers } = location.state || {};
 
     useEffect(() => {
         console.log('DrawingCanvas 组件已挂载');
+        console.log('Initial players:', initialPlayers);
         const canvas = canvasRef.current;
         if (canvas) {
             const ctx = canvas.getContext('2d');
@@ -29,14 +33,17 @@ const DrawingCanvas = () => {
         if (roomId && nickname) {
             // 加入房间并添加自己到玩家列表
             console.log(`Joining room ${roomId} with nickname ${nickname}`);
-            socket.emit('join room', { roomId, nickname, maxPlayers });            
+            socket.emit('join room', { roomId, password, nickname, role: 'drawer' });            
         }
 
+        socket.on('room joined', (roomInfo) => {
+            console.log('Joined room:', roomInfo);
+            setPlayers(roomInfo.players);
+        });
+
         socket.on('update players', (updatedPlayers) => {
-            console.log(`Player list for room ${roomId}:`, updatedPlayers);
-            // 将绘画者的昵称固定在列表的第一个位置
-            const sortedPlayers = [nickname, ...updatedPlayers.filter(player => player !== nickname)];
-            setPlayers(sortedPlayers);
+            console.log('Updated players:', updatedPlayers);
+            setPlayers(updatedPlayers);
         });
 
         return () => {
@@ -47,15 +54,18 @@ const DrawingCanvas = () => {
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-            // 离开房间
-            if (roomId) {
-                console.log(`Leaving room ${roomId} with nickname ${nickname} and max players ${maxPlayers}`);
-                socket.emit('leave room', roomId, nickname);
+            // 组件卸载时，检查是否真的离开了游戏
+            if (!window.location.pathname.includes('/draw') &&
+                !window.location.pathname.includes('/view') &&
+                !window.location.pathname.includes('/judge')) {
+                socket.emit('leave room', { roomId, nickname });
             }
-            // 断开 socket 连接
-            socket.disconnect();
+           
+            socket.off('update room');
+            socket.off('new guess');
+            socket.off('new round');
         };
-    }, [roomId, nickname, maxPlayers]);
+    }, [roomId, nickname, password, role, initialPlayers]);
 
     const getMousePos = (canvas, evt) => {
         const rect = canvas.getBoundingClientRect();
@@ -81,11 +91,11 @@ const DrawingCanvas = () => {
         const pos = getMousePos(canvas, e);
         if (isErasing) {
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.lineWidth = 10; // 橡皮擦的线宽
+            ctx.lineWidth = brushSize * 5; // Eraser size is 5 times the brush size
         } else {
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = color;
-            ctx.lineWidth = 2; // 画笔的线宽
+            ctx.lineWidth = brushSize; // Use current brush size
         }
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
@@ -116,17 +126,24 @@ const DrawingCanvas = () => {
                     body: JSON.stringify({ roomId, imageData, keyword: keyword.trim() }),
                 });
 
-                if (response.ok) {
-                    const { imageUrl, aiProcessingResult } = await response.json();                       
+                if (response.ok) {                                           
                     // 清空画布
                     const ctx = canvas.getContext('2d');
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    // 跳转到 Judge 页面
-                    navigate('/judge', { state: { roomId, keyword: keyword.trim(),  imageUrl, aiProcessingResult} });
+                     // 导航到评判页面
+                    navigate('/judge', { 
+                        state: { 
+                            roomId, 
+                            password,
+                            nickname, 
+                            role: 'drawer', 
+                            keyword: keyword.trim() 
+                        } 
+                    });
 
-                    alert('图片和关键词已上传成功');
+                    alert('Drawing and keyword submitted successfully');
                 } else {
                     throw new Error('图片上传失败1');
                 }
@@ -149,25 +166,15 @@ const DrawingCanvas = () => {
                 {password && <p>Password: {password}</p>}
                 <canvas
                     ref={canvasRef}
-                    width={800}
-                    height={800}
+                    width={700}
+                    height={700}
                     style={{ border: '1px solid black' }}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
-                ></canvas>
-                <div className='sidebar'>
-                        <input
-                            type="text"
-                            value={keyword}
-                            onChange={(e) => setKeyword(e.target.value)}
-                            placeholder="Enter a keyword"
-                        />
-                </div>
-                <div className="button-container">                
-                    <button className="canvas-button" onClick={handleClear}>Clear</button>
-                    <button className="canvas-button" onClick={handleConfirm}>Confirm</button>
+                ></canvas>               
+                <div className="tools-container">                
                     <input
                         type="color"
                         value={color}
@@ -175,20 +182,43 @@ const DrawingCanvas = () => {
                         title="Choose your color"
                         className="canvas-button color-picker"
                     />
+                    <div className="brush-size-control">
+                        <span className="brush-size-value">Brush Size: {brushSize}px</span>
+                        <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            value={brushSize}
+                            onChange={(e) => setBrushSize(Number(e.target.value))}
+                            className="brush-size-slider"
+                        />                        
+                    </div>
                     <button
                         className="canvas-button"
                         onClick={() => setIsErasing(!isErasing)}
                     >
                         {isErasing ? 'Stop Erasing' : 'Erase'}
                     </button>
-                </div>                               
+                    <button className="canvas-button" onClick={handleClear}>Clear</button>
+                </div>
+                <div className='sidebar'>
+                        <input
+                            type="text"
+                            value={keyword}
+                            onChange={(e) => setKeyword(e.target.value)}
+                            placeholder="Enter a keyword"
+                        />
+                </div>   
+                <button className="canvas-button" onClick={handleConfirm}>Submit</button>                            
             </div>
             <div className="players-list">
                 <h3>Players({players.length})</h3>
                 <ul>
-                    {players.map((player, index) => (
-                        <li key={index}>{player}{player === nickname ? ' (You)' : ''}</li>
-                    ))}
+                {players.map((player, index) => (
+                    <li key={index}>
+                        {player.nickname}{player.nickname === nickname ? ' (You)' : ''}                        
+                    </li>
+                ))}
                 </ul>
             </div>
         </div>

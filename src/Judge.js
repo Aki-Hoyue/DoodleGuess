@@ -1,68 +1,124 @@
-// src/Judge.js
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 
 const socket = io('http://localhost:3001');
 
 const Judge = () => {
     const location = useLocation();
-    const { roomId, keyword } = location.state || {};
-    const [guessQueue, setGuessQueue] = useState([]);
-    const [currentGuess, setCurrentGuess] = useState(null);
+    const navigate = useNavigate();
+    const { roomId, password, nickname, role, keyword } = location.state || {};
+
+    const [roomInfo, setRoomInfo] = useState(null);
+    const [aiJudgments, setAiJudgments] = useState([]);
+    const [finalJudgments, setFinalJudgments] = useState({});
+    const [players, setPlayers] = useState([]);
 
     useEffect(() => {
-        // 监听猜画者返回的答案
-        socket.on('new guess', ({ nickname, guess,aiJudgment, guessCount}) => {
-            setGuessQueue(prevQueue => [...prevQueue, { nickname, guess, aiJudgment, guessCount }]);
-        });        
+        if (roomId && nickname) {
+            console.log(`Joining room ${roomId} as judge with keyword: ${keyword}`);
+            socket.emit('join room', { roomId, nickname, role: 'drawer' });
+        }
+
+        socket.on('room joined', (info) => {
+            console.log('Room joined:', info);
+            setRoomInfo(info);
+            setPlayers(info.players);
+        });
+
+        socket.on('ai judgments', (judgments) => {
+            console.log('Received AI judgments:', judgments);
+            setAiJudgments(judgments);
+        });
+
+        socket.on('update players', (updatedPlayers) => {
+            console.log('Updated players:', updatedPlayers);
+            setPlayers(updatedPlayers);
+        });
 
         return () => {
-            socket.off('new guess');
+            if (!window.location.pathname.includes('/draw') &&
+                !window.location.pathname.includes('/view') &&
+                !window.location.pathname.includes('/judge')) {
+                socket.emit('leave room', { roomId, nickname });
+            }
+            socket.off('room joined');
+            socket.off('ai judgments');
+            socket.off('update players');
         };
-    }, []);
+    }, [roomId, nickname, keyword]);
 
-    useEffect(() => {
-        // 如果当前没有正在判断的猜测，且队列中有待判断的猜测，则取出一个进行判断
-        if (!currentGuess && guessQueue.length > 0) {
-            setCurrentGuess(guessQueue[0]);
-            setGuessQueue(prevQueue => prevQueue.slice(1));
-        }
-    }, [currentGuess, guessQueue]);
-
-    const handleJudge = (result) => {
-        if (currentGuess) {
-            socket.emit('judge result', { 
-                roomId, 
-                nickname: currentGuess.nickname, 
-                guess: currentGuess.guess, 
-                result 
-            });
-            // 清除当前猜测，触发下一个猜测的判断
-            setCurrentGuess(null);
-        }
+    const handleJudge = (playerNickname, isCorrect) => {
+        setFinalJudgments(prev => ({
+            ...prev,
+            [playerNickname]: isCorrect
+        }));
     };
 
-    if (!currentGuess) {
-        return <div>Waiting for guesses...</div>;
-    }
+    const handleSubmitJudgments = () => {
+        // Check if all players have been judged
+        if (Object.keys(finalJudgments).length !== aiJudgments.length) {
+            alert('Please judge all players before submitting.');
+            return;
+        }
+
+        console.log('Submitting judgments:', finalJudgments);
+        // Send final judgments to players
+        socket.emit('judge result', { roomId, judgments: finalJudgments });
+        navigate('/waiting', { state: { roomId, password, nickname, role: 'drawer' } });
+    };
 
     return (
-        <div>
+        <div className="judge-container">
             <h2>Judge Page</h2>
+            <p>Room ID: {roomId}</p>
+            <p>Password: {password}</p>
             <p>Keyword: {keyword}</p>
-            <div>
-                <p>{currentGuess.nickname}: {currentGuess.guess}</p>
-                <div>
-                    <p>AI Judgment: {currentGuess.aiJudgment.Judge ? 'Correct' : 'Incorrect'}</p>
-                    <p>Reason: {currentGuess.aiJudgment.Reason}</p>
-                </div>
-                <button onClick={() => handleJudge('approve')}>Approve</button>
-                <button onClick={() => handleJudge('reject')}>Reject</button>
+            <div className="players-list">
+                <h3>Players ({players.length})</h3>
+                <ul>
+                    {players.map((player, index) => (
+                        <li key={index}>{player.nickname} ({player.role})</li>
+                    ))}
+                </ul>
             </div>
-            <p>Remaining guesses to judge: {guessQueue.length}</p>
+            <h3>AI Judgments:</h3>
+            <ul className="judgments-list">
+                {aiJudgments.map((judgment, index) => (
+                    <li key={index} className="judgment-item">
+                        <div><strong>Player:</strong> {judgment.nickname}</div>
+                        <div><strong>Guess:</strong> {judgment.guess}</div>
+                        <div><strong>AI Judgment:</strong> {judgment.Judge ? 'Correct' : 'Incorrect'}</div>
+                        <div><strong>Reason:</strong> {judgment.Reason}</div>
+                        <div className="judge-actions">
+                            <label className={`judge-button approve ${finalJudgments[judgment.nickname] === true ? 'selected' : ''}`}>
+                                <input
+                                    type="radio"
+                                    name={`judgment-${index}`}
+                                    value="approve"
+                                    checked={finalJudgments[judgment.nickname] === true}
+                                    onChange={() => handleJudge(judgment.nickname, true)}
+                                />
+                                ✓
+                            </label>
+                            <label className={`judge-button reject ${finalJudgments[judgment.nickname] === false ? 'selected' : ''}`}>
+                                <input
+                                    type="radio"
+                                    name={`judgment-${index}`}
+                                    value="reject"
+                                    checked={finalJudgments[judgment.nickname] === false}
+                                    onChange={() => handleJudge(judgment.nickname, false)}
+                                />
+                                ✕
+                            </label>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+            <button onClick={handleSubmitJudgments} className="submit-button">Submit Judgments</button>
         </div>
     );
 };
+
 
 export default Judge;

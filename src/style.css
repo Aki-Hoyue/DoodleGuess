@@ -17,8 +17,8 @@ h3 {
 div {
   background-color: #fff;
   border-radius: 8px;
-  margin: 20px auto;
-  padding: 20px;
+  margin: 0px auto;
+  padding: 10px;
   max-width: 800px;
 }
 button {
@@ -69,7 +69,7 @@ p {
   align-items: center;
   width: 100%;
   max-width: 800px;
-  margin: 0 auto;
+  padding: 20px;
 }
 canvas {
   max-width: 100%;
@@ -87,17 +87,54 @@ canvas {
   align-items: center;
   width: 100%;
   max-width: 800px;
-  margin: 0 auto;
+  margin-left: 10px;
+}
+.tools-container {
+  display: flex;
+  justify-content: flex-start; 
+  align-items: center;
+  width: 100%;
+  max-width: 700px;
+}
+
+.brush-size-control {
+  display: flex;
+  align-items: center;
+}
+
+.brush-size-slider {
+  width: 200px; /* 减小滑动条宽度 */
+}
+
+.brush-size-value {
+  width: 130px;
+  text-align: left;
+}
+
+.keyword-container {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 800px;
+}
+
+.keyword-input {
+  flex-grow: 1;
+  margin-right: 10px;
 }
 .button-container {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   margin-top: 0px;
   background-color: transparent; /* 设置背景透明 */
   border: none; /* 无边框 */
 }
 .sidebar {
-  width: 600px;
+  width: 100%;
+  max-width: 600px;
+  margin-top: 0px; /* Reduce top margin to decrease space */
+  display: flex;
+  justify-content: center;
 }
 .max-players-label {
   display: flex;
@@ -113,3 +150,84 @@ canvas {
   border-radius: 4px;
   width: calc(100% - 32px);
 }
+.judge-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.judge-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  margin-right: 10px;
+  font-size: 20px;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.judge-button input {
+  display: none;
+}
+
+.judge-button.approve {
+  background-color: #4CAF50;
+}
+
+.judge-button.reject {
+  background-color: #F44336;
+}
+
+.judge-button:hover {
+  opacity: 0.8;
+}
+
+.judge-button.selected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333;
+}
+
+.viewer-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.viewer-content {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.viewer-main {
+  flex: 3;
+  padding: 20px;
+}
+
+.players-list {
+  position: fixed;
+  top: 10px;
+  align-self: flex-start; /* 确保在父容器的顶部对齐 */
+  background-color: #fff;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-left: 820px; /* 确保与主要内容有一定的间距 */
+}
+
+.players-list h3 {
+  margin-top: 20;
+}
+
+.players-list ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.players-list li {
+  margin-bottom: 10px;
+}
+

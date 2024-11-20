@@ -4,6 +4,7 @@ import DrawingCanvas from './DrawingCanvas';
 import Viewer from './Viewer';
 import RoomManagement from './RoomManagement';
 import Judge from './Judge';
+import Waiting from './Waiting';
 
 // 滚动恢复组件
 function ScrollToTop() {
@@ -35,7 +36,8 @@ function App() {
             path="/judge" 
             element={<Judge />} 
           />
-        </Routes>
+          <Route path="/waiting" element={<Waiting />} />
+        </Routes>        
     </Router>
   );
 }
