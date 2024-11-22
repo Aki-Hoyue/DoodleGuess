@@ -13,6 +13,8 @@ const Judge = () => {
     const [aiJudgments, setAiJudgments] = useState([]);
     const [finalJudgments, setFinalJudgments] = useState({});
     const [players, setPlayers] = useState([]);
+    const [currentRound, setCurrentRound] = useState(1);
+    const [totalRounds, setTotalRounds] = useState(1);
 
     useEffect(() => {
         if (roomId && nickname) {
@@ -20,10 +22,12 @@ const Judge = () => {
             socket.emit('join room', { roomId, nickname, role: 'drawer' });
         }
 
-        socket.on('room joined', (info) => {
-            console.log('Room joined:', info);
-            setRoomInfo(info);
-            setPlayers(info.players);
+        socket.on('room joined', (roomInfo) => {
+            console.log('Room joined:', roomInfo);
+            setRoomInfo(roomInfo);
+            setPlayers(roomInfo.players);
+            setCurrentRound(roomInfo.currentRound);
+            setTotalRounds(roomInfo.totalRounds);
         });
 
         socket.on('ai judgments', (judgments) => {
@@ -36,12 +40,22 @@ const Judge = () => {
             setPlayers(updatedPlayers);
         });
 
+        const handleBeforeUnload = () => {
+            socket.emit('leave room', { roomId, nickname });
+        };
+    
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         return () => {
             if (!window.location.pathname.includes('/draw') &&
                 !window.location.pathname.includes('/view') &&
-                !window.location.pathname.includes('/judge')) {
+                !window.location.pathname.includes('/judge') &&
+                !window.location.pathname.includes('/waiting') &&
+                !window.location.pathname.includes('/game-over')) {
                 socket.emit('leave room', { roomId, nickname });
             }
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            
             socket.off('room joined');
             socket.off('ai judgments');
             socket.off('update players');
@@ -56,6 +70,12 @@ const Judge = () => {
     };
 
     const handleSubmitJudgments = () => {
+         // Check if AI judgments are ready
+        if (aiJudgments.length === 0) {
+            alert('Please wait for AI judgements');
+            return;
+        }
+
         // Check if all players have been judged
         if (Object.keys(finalJudgments).length !== aiJudgments.length) {
             alert('Please judge all players before submitting.');
@@ -65,14 +85,26 @@ const Judge = () => {
         console.log('Submitting judgments:', finalJudgments);
         // Send final judgments to players
         socket.emit('judge result', { roomId, judgments: finalJudgments });
-        navigate('/waiting', { state: { roomId, password, nickname, role: 'drawer' } });
+        navigate(`/waiting/${roomId}`, { state: { roomId, nickname, role: 'drawer' } });
     };
+
+    if (!roomInfo) {
+        return <div>Loading room information...</div>;
+    }
 
     return (
         <div className="judge-container">
             <h2>Judge Page</h2>
             <p>Room ID: {roomId}</p>
             <p>Password: {password}</p>
+            <p>Rounds: {currentRound}/{totalRounds}</p>
+            {roomInfo?.imageUrl && (
+                <img 
+                    src={roomInfo.imageUrl} 
+                    alt="Drawing" 
+                    style={{ maxWidth: '100%' }} 
+                />
+            )}
             <p>Keyword: {keyword}</p>
             <div className="players-list">
                 <h3>Players ({players.length})</h3>
@@ -91,6 +123,7 @@ const Judge = () => {
                         <div><strong>AI Judgment:</strong> {judgment.Judge ? 'Correct' : 'Incorrect'}</div>
                         <div><strong>Reason:</strong> {judgment.Reason}</div>
                         <div className="judge-actions">
+                            <span className="button-label">Approve</span>
                             <label className={`judge-button approve ${finalJudgments[judgment.nickname] === true ? 'selected' : ''}`}>
                                 <input
                                     type="radio"
@@ -101,6 +134,7 @@ const Judge = () => {
                                 />
                                 ✓
                             </label>
+                            <span className="button-label">Reject</span>
                             <label className={`judge-button reject ${finalJudgments[judgment.nickname] === false ? 'selected' : ''}`}>
                                 <input
                                     type="radio"

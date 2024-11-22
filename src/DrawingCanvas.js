@@ -15,6 +15,8 @@ const DrawingCanvas = () => {
     const [brushSize, setBrushSize] = useState(2);
     const [currentDrawer, setCurrentDrawer] = useState('');
     const [isDrawer, setIsDrawer] = useState(false);
+    const [currentRound, setCurrentRound] = useState(1);
+    const [totalRounds, setTotalRounds] = useState(1);
     const location = useLocation();
     const navigate = useNavigate(); 
     const { roomId, password, nickname, role, players: initialPlayers } = location.state || {};
@@ -29,9 +31,7 @@ const DrawingCanvas = () => {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // 加入房间
         if (roomId && nickname) {
-            // 加入房间并添加自己到玩家列表
             console.log(`Joining room ${roomId} with nickname ${nickname}`);
             socket.emit('join room', { roomId, password, nickname, role: 'drawer' });            
         }
@@ -39,6 +39,8 @@ const DrawingCanvas = () => {
         socket.on('room joined', (roomInfo) => {
             console.log('Joined room:', roomInfo);
             setPlayers(roomInfo.players);
+            setCurrentRound(roomInfo.currentRound);
+            setTotalRounds(roomInfo.totalRounds);
         });
 
         socket.on('update players', (updatedPlayers) => {
@@ -46,20 +48,29 @@ const DrawingCanvas = () => {
             setPlayers(updatedPlayers);
         });
 
+        const handleBeforeUnload = () => {
+            socket.emit('leave room', { roomId, nickname });
+        };
+    
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         return () => {
             console.log('DrawingCanvas 组件即将卸载');
-            // 清理画布
+            // Clear the canvas when the component is unmounted
             const canvas = canvasRef.current;
             if (canvas) {
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-            // 组件卸载时，检查是否真的离开了游戏
+            // Leave the room when out of the gaming pages
             if (!window.location.pathname.includes('/draw') &&
                 !window.location.pathname.includes('/view') &&
-                !window.location.pathname.includes('/judge')) {
+                !window.location.pathname.includes('/judge') &&
+                !window.location.pathname.includes('/waiting') &&
+                !window.location.pathname.includes('/game-over')) {
                 socket.emit('leave room', { roomId, nickname });
             }
+            window.removeEventListener('beforeunload', handleBeforeUnload);
            
             socket.off('update room');
             socket.off('new guess');
@@ -114,10 +125,10 @@ const DrawingCanvas = () => {
     const handleConfirm = async () => {
         if (keyword.trim()) {
             const canvas = canvasRef.current;
-            const imageData = canvas.toDataURL('image/png'); // 定义 imageData            
+            const imageData = canvas.toDataURL('image/png');            
 
             try {
-                // 调用后端 API 上传图片
+                // Upload the drawing to the server
                 const response = await fetch('http://localhost:3001/upload-drawing', {
                     method: 'POST',
                     headers: {
@@ -127,13 +138,13 @@ const DrawingCanvas = () => {
                 });
 
                 if (response.ok) {                                           
-                    // 清空画布
+                    // Clear the canvas
                     const ctx = canvas.getContext('2d');
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                     // 导航到评判页面
-                    navigate('/judge', { 
+                     // Navigate to the judge page
+                    navigate(`/judge/${roomId}`, { 
                         state: { 
                             roomId, 
                             password,
@@ -145,11 +156,11 @@ const DrawingCanvas = () => {
 
                     alert('Drawing and keyword submitted successfully');
                 } else {
-                    throw new Error('图片上传失败1');
+                    throw new Error('Fail to upload (1) ');
                 }
             } catch (error) {
                 console.error('Error uploading image:', error);
-                alert('图片上传失败2: ' + error.message);
+                alert('Fail to upload (2): ' + error.message);
             }
         }
         else{
@@ -164,6 +175,7 @@ const DrawingCanvas = () => {
                 <h1>Draw as you like</h1>
                 {roomId && <p>Room ID: {roomId}</p>}
                 {password && <p>Password: {password}</p>}
+                <p>Round: {currentRound}/{totalRounds}</p>
                 <canvas
                     ref={canvasRef}
                     width={700}

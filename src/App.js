@@ -5,6 +5,7 @@ import Viewer from './Viewer';
 import RoomManagement from './RoomManagement';
 import Judge from './Judge';
 import Waiting from './Waiting';
+import GameOver from './GameOver';
 
 // 滚动恢复组件
 function ScrollToTop() {
@@ -33,10 +34,15 @@ function App() {
             element={<Viewer key={window.location.pathname} />} 
           />
           <Route 
-            path="/judge" 
-            element={<Judge />} 
+            path="/judge/:roomId" 
+            element={<Judge key={window.location.pathname}/>} 
           />
-          <Route path="/waiting" element={<Waiting />} />
+          <Route 
+            path="/waiting/:roomId" 
+            element={<Waiting key={window.location.pathname} />} />
+          <Route 
+            path="/game-over" 
+            element={<GameOver key={window.location.pathname} />} />
         </Routes>        
     </Router>
   );

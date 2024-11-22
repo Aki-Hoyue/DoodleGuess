@@ -35,7 +35,7 @@ instrument(io, {
 
 let rooms = {};
 
-// 处理图像上传
+// drawing upload
 app.post('/upload-drawing', async (req, res) => {
     try {
         const { roomId, imageData, keyword } = req.body;
@@ -49,11 +49,13 @@ app.post('/upload-drawing', async (req, res) => {
         const formData = new FormData();
         formData.append('smfile', fs.createReadStream(tempFilePath));
 
-        // Upload to sm.ms
-        const response = await axios.post(process.env.IMG_URL_BASE_URL, formData, {
+        // Upload to img url api
+        const response = await axios.post(process.env.SMMS_IMG_URL_BASE_URL, formData, {
             headers: {
                 ...formData.getHeaders(),
-                'Authorization': process.env.IMG_URL_API
+                'Authorization': process.env.SMMS_IMG_URL_API
+                // 'Content-Type': 'multipart/form-data'
+                // 'Authorization': `Bearer ${process.env.HELLO_IMG_URL_API}`
             },
         });
 
@@ -105,20 +107,21 @@ function callPythonScript(keyword, guesses) {
     });
 }
 
+// submit guess to AI
 app.post('/submit-guess', async (req, res) => {
     const { roomId, nickname, guess } = req.body;
     console.log(`Received guess: Room ${roomId}, Nickname ${nickname}, Guess "${guess}"`);
     const room = rooms[roomId];
 
     if (room) {
-        room.guesses[nickname] = guess;
+        room.guesses[nickname] = guess; // Store the guess temporarily if not all guesses are gathered yet
         console.log(`Number of guesses in room ${roomId}: ${Object.keys(room.guesses).length}`);
         if (Object.keys(room.guesses).length === room.players.length - 1) {
             try {
                 console.log(`Preparing to call AI script, Keyword: "${room.keyword}", Guesses: ${JSON.stringify(Object.values(room.guesses))}`);
                 const aiJudgments = await callPythonScript(room.keyword, Object.values(room.guesses));
                 console.log(`AI returned result: ${JSON.stringify(aiJudgments)}`);
-                // 处理返回的json格式
+                // process the AI judgment results
                 const judgments = aiJudgments.map((judgment, index) => ({
                     nickname: Object.keys(room.guesses)[index],
                     guess: room.guesses[Object.keys(room.guesses)[index]],
@@ -128,7 +131,7 @@ app.post('/submit-guess', async (req, res) => {
                 room.aiJudgments = judgments;
                 console.log(`Processed ai judgment results: ${JSON.stringify(judgments)}`);
 
-                // 将 AI 判断结果发送给绘画者
+                // send the AI judgments to the drawer
                 console.log(`Current players in room ${roomId}: ${JSON.stringify(room.players)}`);
                 console.log(`Emitting 'ai judgments' event to room ${roomId}`);
                 io.to(roomId).emit('ai judgments', judgments);
@@ -146,10 +149,11 @@ app.post('/submit-guess', async (req, res) => {
     }
 });
 
-// WebSocket 连接
+// WebSocket connection
 io.on('connection', (socket) => {
+    let userInfo = null;
 
-    socket.on('create room', ({ password, maxPlayers, creatorNickname }) => {
+    socket.on('create room', ({ password, maxPlayers, rounds, creatorNickname }) => {
         const roomId = Math.floor(1000 + Math.random() * 9000).toString();
         rooms[roomId] = {
             players: [{
@@ -163,7 +167,11 @@ io.on('connection', (socket) => {
             imageUrl: null,
             guesses: {},
             readyPlayers: new Set(),
-            maxPlayers: maxPlayers
+            maxPlayers: maxPlayers,
+            totalRounds: rounds,
+            currentRound: 1,
+            playersDrawn: 0,
+            playerScores: {} 
         };
 
         socket.join(roomId);
@@ -175,10 +183,14 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('update players', rooms[roomId].players);
     });
     
-    socket.on('join room', ({ roomId, password, nickname, role }) => {      
+    socket.on('join room', ({ roomId, nickname, role }) => {   
+        userInfo = { roomId, nickname };   
         const room = rooms[roomId];
         if (room) {
-            const existingPlayerIndex = room.players.findIndex(p => p.nickname === nickname);
+            if (!room.playerScores[nickname]) {
+                room.playerScores[nickname] = { correctGuesses: 0, drawingsGuessedCorrectly: 0 };
+            }
+            const existingPlayerIndex = room.players.findIndex(p => p.nickname === nickname);           
             if (existingPlayerIndex !== -1) {
                 // Player is rejoining
                 room.players[existingPlayerIndex].socketId = socket.id;
@@ -189,7 +201,7 @@ io.on('connection', (socket) => {
                     room.players.push({
                         nickname,
                         role: role || 'guesser',
-                        socketId: socket.id
+                        socketId: socket.id                        
                     });
                 } else {
                     socket.emit('room full');
@@ -209,8 +221,11 @@ io.on('connection', (socket) => {
                 roomId,
                 players: room.players,
                 drawer: room.drawer,
+                currentRound: room.currentRound,
+                totalRounds: room.totalRounds,
                 imageUrl: room.imageUrl,
-                keyword: role === 'drawer' ? room.keyword : null // Only send keyword to drawer
+                finalScores: room.playerScores,
+                keyword: room.keyword 
             });
 
             // Notify others about the new/rejoined player
@@ -269,6 +284,7 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         if (room) {                       
             // Combine AI judgments with drawer judgments
+            room.readyPlayers = new Set(); // Reset ready players
             const finalResults = {};
             for (const [nickname, isCorrect] of Object.entries(judgments)) {
                 const aiJudgment = room.aiJudgments.find(j => j.nickname === nickname);
@@ -278,9 +294,15 @@ io.on('connection', (socket) => {
                     aiReason: aiJudgment.Reason,
                     drawerJudge: isCorrect
                 };
+
+                // If player's guess is correct (drawer's judgment matches AI judgment), increment correct guesses
+                if ((finalResults[nickname].aiJudge === finalResults[nickname].drawerJudge)) {
+                    room.playerScores[nickname].correctGuesses++;
+                    room.playerScores[room.drawer].drawingsGuessedCorrectly++;
+                }
             }
 
-            // send the final results to all guessers
+            // Send the final results to all guessers
             room.players.forEach(player => {
                 if (player.role === 'guesser') {
                     const playerResult = finalResults[player.nickname];
@@ -289,6 +311,9 @@ io.on('connection', (socket) => {
                     }
                 }
             });
+
+            // 广播更新后的猜测列表给所有玩家
+            io.to(roomId).emit('update guesses', room.guesses);
         }
     });
 
@@ -299,32 +324,71 @@ io.on('connection', (socket) => {
             }
             rooms[roomId].readyPlayers.add(nickname);
 
-            // 广播更新后的准备玩家列表
+            // Update all players in the room with the updated ready players list
             io.to(roomId).emit('update ready players', Array.from(rooms[roomId].readyPlayers));
 
-            // 检查是否所有玩家都准备好了
-            if (rooms[roomId].readyPlayers.size === rooms[roomId].players.length) {
-                // 所有玩家都准备好了，开始新的回合
+            // Whether all players are ready
+            if (rooms[roomId].readyPlayers.size === rooms[roomId].players.length) {              
                 const room = rooms[roomId];
-                
-                // 切换到下一个绘画者
-                const currentDrawerIndex = room.players.findIndex(p => p.role === 'drawer');
-                const nextDrawerIndex = (currentDrawerIndex + 1) % room.players.length;
-                room.players[currentDrawerIndex].role = 'guesser';
-                room.players[nextDrawerIndex].role = 'drawer';
-                room.drawer = room.players[nextDrawerIndex].nickname;
-                room.keyword = null;
-                room.imageUrl = null;
-                room.guesses = {};
-                
-                // 通知所有玩家新的回合开始
-                io.to(roomId).emit('new round', {
-                    currentDrawer: room.players[nextDrawerIndex].nickname,
-                    password: room.password
-                });
+                room.playersDrawn++;
+                console.log('player list:', room.players);
+                console.log('players drawn:', room.playersDrawn);
 
-                // 重置准备玩家列表
-                room.readyPlayers = new Set();
+                if (room.playersDrawn === room.players.length) { // If all players have drawn, go to next round
+                    room.currentRound++;
+                    room.playersDrawn = 0;
+                    console.log('current round:', room.currentRound);
+                    console.log('total rounds:', room.totalRounds);
+                }
+                
+                if (room.currentRound > room.totalRounds) { // If all rounds are done, game over
+                    console.log('all rounds are done, send game over');
+                    console.log('Sending final scores:', room.playerScores);
+                    io.to(roomId).emit('game over', room.playerScores);  
+                    console.log('Deleting room:', roomId); 
+                    delete rooms[roomId];                  
+                } else {
+                    // next drawer
+                    const currentDrawerIndex = room.players.findIndex(p => p.role === 'drawer');
+                    const nextDrawerIndex = (currentDrawerIndex + 1) % room.players.length;
+                    room.players[currentDrawerIndex].role = 'guesser';
+                    room.players[nextDrawerIndex].role = 'drawer';
+                    room.drawer = room.players[nextDrawerIndex].nickname;
+                    room.keyword = null;
+                    room.imageUrl = null;
+                    room.guesses = {};
+                    room.readyPlayers = new Set(); // Reset ready players                   
+                    
+                    // Notify all players in the room the new round starting
+                    console.log(`New round starting in room ${roomId}`);
+                    io.to(roomId).emit('new round', {
+                        currentDrawer: room.players[nextDrawerIndex].nickname,
+                        password: room.password
+                    });                                                                        
+                }
+            }
+        }
+    });
+
+    socket.on('disconnect', () => {
+        if (userInfo) {
+            const { roomId, nickname } = userInfo;
+            const room = rooms[roomId];
+            
+            if (room) {
+                console.log(`Player ${nickname} disconnected from room ${roomId}`);
+                // 从房间中移除玩家
+                room.players = room.players.filter(player => player.nickname !== nickname);
+                console.log('Player list after disconnection:', room.players);
+                
+                if (room.players.length === 0) {
+                    // 如果房间空了，删除房间
+                    console.log(`Room ${roomId} is empty, deleting...`);
+                    delete rooms[roomId];
+                } else {
+                    // 通知其他玩家更新玩家列表
+                    io.to(roomId).emit('update players', room.players);
+                }
             }
         }
     });

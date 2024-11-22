@@ -11,19 +11,22 @@ const Viewer = () => {
     const [players, setPlayers] = useState([]);
     const { roomId, password, nickname } = location.state || {};
 
-    // 使用 useRef 来存储状态
+    // Use refs to store the judgment result and whether to show the judgment
     const judgmentResultRef = useRef(null);
     const showJudgmentRef = useRef(false);
     const imageUrlRef = useRef('');
     const waitingForImageRef = useRef(true);
 
-    // 用于强制重新渲染的 state
+    // State to force update the component
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-    // 用于跟踪用户猜测的状态
+    // States to store the guess and submission status
     const [guess, setGuess] = useState('');
     const [hasGuessed, setHasGuessed] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [currentRound, setCurrentRound] = useState(1);
+    const [totalRounds, setTotalRounds] = useState(1);
+    const [otherGuesses, setOtherGuesses] = useState({}); 
 
     const handlePersonalJudgment = useCallback((result) => {
         console.log('Received personal judgment:', result);
@@ -47,13 +50,15 @@ const Viewer = () => {
     useLayoutEffect(() => {
         if (roomId && nickname) {
             console.log(`Joining room ${roomId} with nickname ${nickname}`);
-            socket.emit('join room', { roomId, password, nickname, role: 'guesser' });
+            socket.emit('join room', { roomId, nickname, role: 'guesser' });
         }
 
         socket.on('room joined', (roomInfo) => {
             console.log('Joined room:', roomInfo);
             setRoomInfo(roomInfo);
             setPlayers(roomInfo.players);
+            setCurrentRound(roomInfo.currentRound);
+            setTotalRounds(roomInfo.totalRounds);
             if (roomInfo.imageUrl) {
                 imageUrlRef.current = roomInfo.imageUrl;
                 waitingForImageRef.current = false;
@@ -70,18 +75,33 @@ const Viewer = () => {
         socket.on('new drawing', ({ keyword, imageUrl }) => {
             imageUrlRef.current = imageUrl;
             waitingForImageRef.current = false;
-            setHasGuessed(false);  // 重置猜测状态
+            setHasGuessed(false);  // Reset the guess status
             forceUpdate();
         });
 
         socket.on('personal judgment', handlePersonalJudgment);
 
+        // Receive other players' guesses
+        socket.on('update guesses', (guesses) => {
+            setOtherGuesses(guesses);
+        });
+
+        const handleBeforeUnload = () => {
+            socket.emit('leave room', { roomId, nickname });
+        };
+    
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         return () => {
             if (!window.location.pathname.includes('/draw') &&
                 !window.location.pathname.includes('/view') &&
-                !window.location.pathname.includes('/judge')) {
+                !window.location.pathname.includes('/judge') &&
+                !window.location.pathname.includes('/waiting') &&
+                !window.location.pathname.includes('/game-over')) {
                 socket.emit('leave room', { roomId, nickname });
             }
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            
             socket.off('room joined');
             socket.off('new drawing');
             socket.off('personal judgment', handlePersonalJudgment);
@@ -91,20 +111,27 @@ const Viewer = () => {
     const handleGuess = useCallback(async (e) => {
         e.preventDefault();
         const guessValue = guess.trim();
+        // Check if the guess is empty
+        if (!guessValue) {
+            alert('Please enter your guess');
+            return;
+        }
+
         if (guessValue && !isSubmitting) {
             setIsSubmitting(true);
+            // Submit the guess to the server
             try {
                 const response = await fetch('http://localhost:3001/submit-guess', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        //'Accept': 'application/json',
+                        'Content-Type': 'application/json',                                               
                     },
                     body: JSON.stringify({ roomId, nickname, guess: guessValue }),
                 });
 
                 if (response.ok) {
                     setHasGuessed(true);
-                    setGuess('');
                 } else {
                     const errorData = await response.json();
                     throw new Error(errorData.error || 'Failed to submit guess');
@@ -119,11 +146,14 @@ const Viewer = () => {
     }, [roomId, nickname, guess, isSubmitting]);
 
     const handleConfirmJudgment = useCallback(() => {
+        setHasGuessed(false);
+        setGuess('');
         showJudgmentRef.current = false;  
         imageUrlRef.current = '';  
         waitingForImageRef.current = true;   
-        navigate('/waiting', { state: { roomId, password, nickname, role: 'guesser' } });
+        navigate(`/waiting/${roomId}`, { state: { roomId, nickname, role: 'guesser' } });
     }, [roomId, nickname, navigate]);
+
 
     return (
         <div className="viewer">
@@ -131,6 +161,7 @@ const Viewer = () => {
                 <h2>Doodle Guess</h2>
                 <p>Room ID: {roomId}</p>
                 <p>Password: {password}</p>
+                <p>Round: {currentRound}/{totalRounds}</p>
             </div>
             <div className="viewer-content">
                 <div className="viewer-main">
@@ -161,10 +192,21 @@ const Viewer = () => {
                     {showJudgmentRef.current && judgmentResultRef.current && (
                         <div className="judgment-result">
                             <h3>Final Result</h3>
+                            <p>Your Guess: {guess}</p>
+                            {roomInfo?.keyword && (<p>Keyword: {roomInfo.keyword}</p>)}
                             <p>AI Judgment: {judgmentResultRef.current.aiJudgment ? 'Correct' : 'Incorrect'}</p>
                             <p>AI Reasoning: {judgmentResultRef.current.aiReason}</p>
-                            <p>Drawer Judgment: {judgmentResultRef.current.drawerJudgment ? 'Correct' : 'Incorrect'}</p>
+                            <p>Drawer Judgment: {judgmentResultRef.current.drawerJudgment ? 'Approve AI judgement' : 'Reject AI judgement'}</p>
                             <p>Final Result: {judgmentResultRef.current.finalJudgment ? 'Correct' : 'Incorrect'}</p>
+                            <h4>Other Players' Guesses:</h4>
+                            <ul>
+                                {Object.entries(otherGuesses)
+                                    .filter(([playerNickname]) => playerNickname !== nickname)
+                                    .map(([playerNickname, playerGuess], index) => (
+                                        <li key={index}>{playerNickname}: {playerGuess}</li>
+                                    ))
+                                }
+                            </ul>
                             <button onClick={handleConfirmJudgment}>Confirm and Continue</button>
                         </div>
                     )}

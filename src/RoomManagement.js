@@ -9,13 +9,13 @@ const RoomManagement = () => {
     const [roomId, setRoomId] = useState('');
     const [password, setPassword] = useState('');
     const [createPassword, setCreatePassword] = useState('');
-    const [painterNickname, setPainterNickname] = useState(''); // 创建房间玩家的昵称
-    const [viewerNickname, setViewerNickname] = useState(''); // 加入房间玩家的昵称
-    const [maxPlayers, setMaxPlayers] = useState(3); // 最大玩家数量
+    const [painterNickname, setPainterNickname] = useState(''); // Nickname of the creator
+    const [viewerNickname, setViewerNickname] = useState(''); // Nickname of the new joiner
+    const [maxPlayers, setMaxPlayers] = useState(3); // Maximum number of players
+    const [rounds, setRounds] = useState(1); // Number of rounds
     const navigate = useNavigate();
 
     useEffect(() => {
-        // 组件挂载时的逻辑
         console.log('RoomManagement 组件已挂载');
 
         socket.on('room created', ({ roomId, players, drawer }) => {
@@ -43,6 +43,7 @@ const RoomManagement = () => {
             socket.emit('create room', { 
                 password: createPassword,
                 maxPlayers, 
+                rounds,
                 creatorNickname: painterNickname 
             });
         } else {
@@ -65,7 +66,7 @@ const RoomManagement = () => {
             socket.on('password and nickname valid', () => {
 
                 console.log(`Joining room ${roomId} with nickname ${viewerNickname}`);
-                socket.emit('join room', { roomId, password, nickname: viewerNickname, role: 'guesser' });
+                socket.emit('join room', { roomId, nickname: viewerNickname, role: 'guesser' });
 
                 socket.on('room full', () => {
                     alert('The room is full.');
@@ -106,6 +107,18 @@ const RoomManagement = () => {
                     {[3, 4, 5, 6, 7, 8].map(num => (
                         <option key={num} value={num}>{num}</option>
                     ))}
+                </select>
+            </label>
+            <label className="rounds-label">
+                Rounds:
+                <select
+                id="rounds"
+                value={rounds}
+                onChange={(e) => setRounds(parseInt(e.target.value))}
+                >
+                {[1, 2, 3, 4, 5].map(num => (
+                    <option key={num} value={num}>{num}</option>
+                ))}
                 </select>
             </label>
             <button onClick={handleCreateRoom}>Create Room</button>

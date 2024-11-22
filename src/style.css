@@ -150,6 +150,20 @@ canvas {
   border-radius: 4px;
   width: calc(100% - 32px);
 }
+.rounds-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+.rounds-label select {
+  margin-left: 10px;
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: calc(100% - 32px);
+}
 .judge-actions {
   display: flex;
   justify-content: flex-start;
@@ -190,6 +204,11 @@ canvas {
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333;
 }
 
+.button-label {
+  margin: 10px;
+  font-size: 16px;
+}
+
 .viewer-header {
   text-align: center;
   margin-bottom: 20px;
@@ -209,13 +228,13 @@ canvas {
 .players-list {
   position: fixed;
   top: 10px;
-  align-self: flex-start; /* 确保在父容器的顶部对齐 */
+  align-self: flex-start; 
   background-color: #fff;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-left: 820px; /* 确保与主要内容有一定的间距 */
+  margin-left: 820px; 
 }
 
 .players-list h3 {
