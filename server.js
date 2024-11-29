@@ -67,7 +67,7 @@ app.post('/upload-drawing', async (req, res) => {
 
             if (rooms[roomId]) {
                 rooms[roomId].imageUrl = imageUrl;
-                rooms[roomId].keyword = keyword;
+                rooms[roomId].keyword = keyword;                         
             }
             
             // Notify all players in the room about the new drawing
@@ -83,6 +83,7 @@ app.post('/upload-drawing', async (req, res) => {
     }
 });
 
+// Call Python script to use ai.py for AI judgments
 function callPythonScript(keyword, guesses) {
     return new Promise((resolve, reject) => {
         const pythonProcess = spawn(pythonPath, ['ai.py', keyword, ...guesses]);
@@ -107,7 +108,7 @@ function callPythonScript(keyword, guesses) {
     });
 }
 
-// submit guess to AI
+// Submit guess to AI for processing
 app.post('/submit-guess', async (req, res) => {
     const { roomId, nickname, guess } = req.body;
     console.log(`Received guess: Room ${roomId}, Nickname ${nickname}, Guess "${guess}"`);
@@ -121,7 +122,7 @@ app.post('/submit-guess', async (req, res) => {
                 console.log(`Preparing to call AI script, Keyword: "${room.keyword}", Guesses: ${JSON.stringify(Object.values(room.guesses))}`);
                 const aiJudgments = await callPythonScript(room.keyword, Object.values(room.guesses));
                 console.log(`AI returned result: ${JSON.stringify(aiJudgments)}`);
-                // process the AI judgment results
+                // Process the AI judgment results
                 const judgments = aiJudgments.map((judgment, index) => ({
                     nickname: Object.keys(room.guesses)[index],
                     guess: room.guesses[Object.keys(room.guesses)[index]],
@@ -131,7 +132,7 @@ app.post('/submit-guess', async (req, res) => {
                 room.aiJudgments = judgments;
                 console.log(`Processed ai judgment results: ${JSON.stringify(judgments)}`);
 
-                // send the AI judgments to the drawer
+                // Send the AI judgments to the drawer
                 console.log(`Current players in room ${roomId}: ${JSON.stringify(room.players)}`);
                 console.log(`Emitting 'ai judgments' event to room ${roomId}`);
                 io.to(roomId).emit('ai judgments', judgments);
@@ -213,8 +214,8 @@ io.on('connection', (socket) => {
             
             // If this player is the drawer, update room.drawer
             if (role === 'drawer') {
-                room.drawer = nickname;
-            }
+                room.drawer = nickname;                       
+            }                
 
             // Send room info to the joining player
             socket.emit('room joined', {
@@ -256,15 +257,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('leave room', ({ roomId, nickname }) => {
-        console.log('Player list', rooms[roomId].players);
         if (rooms[roomId]) {
+            // Remove player from room
             rooms[roomId].players = rooms[roomId].players.filter(player => player.nickname !== nickname);
-            console.log('Player list after leaving', rooms[roomId].players);
+            //console.log('Player list after leaving', rooms[roomId].players);
             
             if (rooms[roomId].players.length === 0) {
                 delete rooms[roomId];
-                console.log(`Room ${roomId} deleted as it's empty`);
-            } else {
+                //console.log(`Room ${roomId} deleted as it's empty`);
+            } 
+
+            if (rooms[roomId].drawer === nickname) {
+                // Notify all players in the room that the drawer left
+                io.to(roomId).emit('drawer left');
+
+                // Delete room if drawer left
+                //console.log(`Drawer ${nickname} has left`);
+                delete rooms[roomId];
+            }          
+            
+            else 
+            {
                 io.to(roomId).emit('update players', rooms[roomId].players);
             }
         }
@@ -303,7 +316,7 @@ io.on('connection', (socket) => {
             }
 
             // Send the final results to all guessers
-            room.players.forEach(player => {
+            room.players.forEach(player => {               
                 if (player.role === 'guesser') {
                     const playerResult = finalResults[player.nickname];
                     if (playerResult) {
@@ -312,7 +325,7 @@ io.on('connection', (socket) => {
                 }
             });
 
-            // 广播更新后的猜测列表给所有玩家
+            // Broadcast other players' guesses to guessers
             io.to(roomId).emit('update guesses', room.guesses);
         }
     });
@@ -328,6 +341,7 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('update ready players', Array.from(rooms[roomId].readyPlayers));
 
             // Whether all players are ready
+            const room = rooms[roomId];
             if (rooms[roomId].readyPlayers.size === rooms[roomId].players.length) {              
                 const room = rooms[roomId];
                 room.playersDrawn++;
@@ -366,6 +380,9 @@ io.on('connection', (socket) => {
                         password: room.password
                     });                                                                        
                 }
+            } else if (room.currentRound === room.totalRounds && room.playersDrawn === room.players.length - 1) {
+                // Send final round signal if it's the last turn of last round
+                io.to(roomId).emit('final round');
             }
         }
     });
@@ -377,17 +394,61 @@ io.on('connection', (socket) => {
             
             if (room) {
                 console.log(`Player ${nickname} disconnected from room ${roomId}`);
-                // 从房间中移除玩家
+                // Remove player from room
                 room.players = room.players.filter(player => player.nickname !== nickname);
                 console.log('Player list after disconnection:', room.players);
                 
                 if (room.players.length === 0) {
-                    // 如果房间空了，删除房间
+                    // Delete room if no players left
                     console.log(`Room ${roomId} is empty, deleting...`);
                     delete rooms[roomId];
-                } else {
-                    // 通知其他玩家更新玩家列表
+                } 
+
+                if (room.drawer === nickname) {
+                    // Notify all players in the room that the drawer left
+                    io.to(roomId).emit('drawer left');
+    
+                    // Delete room if drawer left
+                    console.log(`Drawer ${nickname} has left`);
+                    delete rooms[roomId];
+                }
+
+                else 
+                {
+                    // Update all clients with new player list
                     io.to(roomId).emit('update players', room.players);
+                     // If the disconnected player was the drawer, check whether to submit for AI judgments
+                     const activeGuessers = room.players.filter(p => p.role === 'guesser').map(p => p.nickname);
+                     const requiredGuesses = activeGuessers.length;
+ 
+                     console.log(`Required guesses for room ${roomId}: ${requiredGuesses}`);
+                     console.log(`Submitted guesses: ${Object.keys(room.guesses).length}`);
+ 
+                     if (Object.keys(room.guesses).length === requiredGuesses) {                      
+                         (async () => {
+                             try {
+                                 console.log(`Preparing to call AI script, Keyword: "${room.keyword}", Guesses: ${JSON.stringify(Object.values(room.guesses))}`);
+                                 const aiJudgments = await callPythonScript(room.keyword, Object.values(room.guesses));
+                                 console.log(`AI returned result: ${JSON.stringify(aiJudgments)}`);
+                                 
+                                 // Process the AI judgment results
+                                 const judgments = aiJudgments.map((judgment, index) => ({
+                                     nickname: activeGuessers[index],
+                                     guess: room.guesses[activeGuessers[index]],
+                                     ...judgment
+                                 }));
+ 
+                                 room.aiJudgments = judgments;
+                                 console.log(`Processed ai judgment results: ${JSON.stringify(judgments)}`);
+ 
+                                 // Send the AI judgments to the drawer
+                                 io.to(roomId).emit('ai judgments', judgments);
+                             } catch (error) {
+                                 console.error('Error processing guesses:', error);
+                                 io.to(roomId).emit('ai judgments error', 'Failed to process guesses');
+                             }
+                         })();
+                    }
                 }
             }
         }

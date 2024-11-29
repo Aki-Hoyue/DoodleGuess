@@ -11,6 +11,7 @@ const Waiting = () => {
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [currentRound, setCurrentRound] = useState(1);
     const [totalRounds, setTotalRounds] = useState(1);
+    const [isFinalRound, setIsFinalRound] = useState(false);
 
     useEffect(() => {
         if (roomId && nickname) {
@@ -45,6 +46,18 @@ const Waiting = () => {
             }
         });
 
+        socket.on('final round', () => {
+            setIsFinalRound(true);
+        });
+
+        socket.on('drawer left', () => {
+            alert('The drawer has left the room. Redirecting to the home page in 3s...');
+            setTimeout(() => {
+                navigate('/');
+            }, 3000);
+        });
+
+        // Omit leave room event when closing tab or browser
         const handleBeforeUnload = () => {
             socket.emit('leave room', { roomId, nickname });
         };
@@ -62,6 +75,9 @@ const Waiting = () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
 
             socket.off('update ready players');
+            socket.off('final round');
+            socket.off('game over');
+            socket.off('drawer left');
             socket.off('new round');
         };
     }, [roomId, nickname, navigate]);
@@ -72,6 +88,7 @@ const Waiting = () => {
             <p>Room ID: {roomId}</p>
             <p>Current round: {currentRound}/{totalRounds}</p>
             <p>Already prepared players: {readyPlayers.map(player => player === nickname ? `${player} (You)` : player).join(', ')}</p>
+            {isFinalRound && <p className="next-alert">Game over. Preparing to enter the final score page...</p>}
         </div>
     );
 };

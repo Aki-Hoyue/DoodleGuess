@@ -27,6 +27,7 @@ const Viewer = () => {
     const [currentRound, setCurrentRound] = useState(1);
     const [totalRounds, setTotalRounds] = useState(1);
     const [otherGuesses, setOtherGuesses] = useState({}); 
+    const [isFinalRound, setIsFinalRound] = useState(false);
 
     const handlePersonalJudgment = useCallback((result) => {
         console.log('Received personal judgment:', result);
@@ -72,6 +73,13 @@ const Viewer = () => {
             forceUpdate();
         });
 
+        socket.on('drawer left', () => {
+            alert('The drawer has left the room. Redirecting to the home page in 3s...');
+            setTimeout(() => {
+                navigate('/');
+            }, 3000);
+        });
+
         socket.on('new drawing', ({ keyword, imageUrl }) => {
             imageUrlRef.current = imageUrl;
             waitingForImageRef.current = false;
@@ -86,6 +94,11 @@ const Viewer = () => {
             setOtherGuesses(guesses);
         });
 
+        socket.on('final round', () => {
+            setIsFinalRound(true);
+        });
+
+        // Omit leave room event when closing tab or browser
         const handleBeforeUnload = () => {
             socket.emit('leave room', { roomId, nickname });
         };
@@ -103,10 +116,12 @@ const Viewer = () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
             
             socket.off('room joined');
+            socket.off('update players');
             socket.off('new drawing');
+            socket.off('drawer left');
             socket.off('personal judgment', handlePersonalJudgment);
         };
-    }, [roomId, nickname, handlePersonalJudgment]);
+    }, [roomId, nickname, handlePersonalJudgment, navigate]);
 
     const handleGuess = useCallback(async (e) => {
         e.preventDefault();
@@ -153,6 +168,14 @@ const Viewer = () => {
         waitingForImageRef.current = true;   
         navigate(`/waiting/${roomId}`, { state: { roomId, nickname, role: 'guesser' } });
     }, [roomId, nickname, navigate]);
+
+    // Whether the player is the next drawer
+    const isNextDrawer = useCallback(() => {
+        if (!roomInfo) return false;
+        const currentDrawerIndex = players.findIndex(p => p.role === 'drawer');
+        const nextDrawerIndex = (currentDrawerIndex + 1) % players.length;
+        return players[nextDrawerIndex].nickname === nickname;
+    }, [roomInfo, players, nickname]);
 
 
     return (
@@ -207,6 +230,8 @@ const Viewer = () => {
                                     ))
                                 }
                             </ul>
+                            {isFinalRound && <p className="next-alert">This is the final round!</p>}
+                            {!isFinalRound && isNextDrawer() && <p className="next-alert">You are the next drawer!</p>}
                             <button onClick={handleConfirmJudgment}>Confirm and Continue</button>
                         </div>
                     )}
