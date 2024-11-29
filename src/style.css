@@ -250,3 +250,10 @@ canvas {
   margin-bottom: 10px;
 }
 
+.next-alert {
+  color: #ff0000; /* 红色字体 */
+  font-weight: bold; /* 加粗 */
+  font-size: 18px; /* 字体大小 */
+  margin-top: 10px; /* 上边距 */
+}
+

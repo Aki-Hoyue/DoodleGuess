@@ -40,6 +40,7 @@ const Judge = () => {
             setPlayers(updatedPlayers);
         });
 
+        // Omit leave room event when closing tab or browser
         const handleBeforeUnload = () => {
             socket.emit('leave room', { roomId, nickname });
         };
