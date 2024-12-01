@@ -1,9 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { connectWebSocket, sendMessage, addMessageHandler, removeMessageHandler, api } from './utils/websocket';
 import './style.css';
-
-const socket = io('http://localhost:3001');
 
 const DrawingCanvas = () => {
     const canvasRef = useRef(null);
@@ -13,17 +11,21 @@ const DrawingCanvas = () => {
     const [keyword, setKeyword] = useState('');
     const [players, setPlayers] = useState([]);
     const [brushSize, setBrushSize] = useState(2);
-    const [currentDrawer, setCurrentDrawer] = useState('');
-    const [isDrawer, setIsDrawer] = useState(false);
     const [currentRound, setCurrentRound] = useState(1);
     const [totalRounds, setTotalRounds] = useState(1);
     const location = useLocation();
-    const navigate = useNavigate(); 
-    const { roomId, password, nickname, role, players: initialPlayers } = location.state || {};
+    const navigate = useNavigate();
+    const { roomId, password, nickname, clientId, role } = location.state || {};
 
     useEffect(() => {
-        console.log('DrawingCanvas 组件已挂载');
-        console.log('Initial players:', initialPlayers);
+        if (!roomId || !nickname || !clientId) {
+            navigate('/');
+            return;
+        }
+
+        document.title = 'Drawing - DoodleGuess';
+
+        // Initialize the canvas
         const canvas = canvasRef.current;
         if (canvas) {
             const ctx = canvas.getContext('2d');
@@ -31,53 +33,63 @@ const DrawingCanvas = () => {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        if (roomId && nickname) {
-            console.log(`Joining room ${roomId} with nickname ${nickname}`);
-            socket.emit('join room', { roomId, password, nickname, role: 'drawer' });            
-        }
+        connectWebSocket(clientId);
 
-        socket.on('room joined', (roomInfo) => {
-            console.log('Joined room:', roomInfo);
-            setPlayers(roomInfo.players);
-            setCurrentRound(roomInfo.currentRound);
-            setTotalRounds(roomInfo.totalRounds);
+        addMessageHandler('player_joined', (data) => {
+            setPlayers(data.players);
         });
 
-        socket.on('update players', (updatedPlayers) => {
-            console.log('Updated players:', updatedPlayers);
-            setPlayers(updatedPlayers);
+        addMessageHandler('player_left', (data) => {
+            setPlayers(data.players);
         });
 
-        // Omit leave room event when closing tab or browser
-        const handleBeforeUnload = () => {
-            socket.emit('leave room', { roomId, nickname });
+        addMessageHandler('game_start', (data) => {
+            setCurrentRound(data.currentRound);
+        });
+
+        addMessageHandler('round_start', (data) => {
+            setCurrentRound(data.currentRound);
+        });
+
+        // Get initial game state
+        const fetchGameState = async () => {
+            try {
+                const state = await api.getGameState(roomId);
+                setPlayers(state.players);
+                setCurrentRound(state.current_round);
+                setTotalRounds(state.total_rounds);
+            } catch (error) {
+                console.error('Failed to fetch game state:', error);
+            }
         };
-    
+        fetchGameState();
+
+        const handleBeforeUnload = () => {
+            sendMessage({
+                event: 'leave_room',
+                roomId,
+                clientId
+            });
+        };
         window.addEventListener('beforeunload', handleBeforeUnload);
 
         return () => {
-            console.log('DrawingCanvas 组件即将卸载');
-            // Clear the canvas when the component is unmounted
-            const canvas = canvasRef.current;
-            if (canvas) {
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-            // Leave the room when out of the gaming pages
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            removeMessageHandler('player_joined');
+            removeMessageHandler('player_left');
+            removeMessageHandler('game_start');
+            removeMessageHandler('round_start');
+            
+            // Leave the room
             if (!window.location.pathname.includes('/draw') &&
                 !window.location.pathname.includes('/view') &&
                 !window.location.pathname.includes('/judge') &&
                 !window.location.pathname.includes('/waiting') &&
                 !window.location.pathname.includes('/game-over')) {
-                socket.emit('leave room', { roomId, nickname });
+                handleBeforeUnload();
             }
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-           
-            socket.off('update room');
-            socket.off('new guess');
-            socket.off('new round');
         };
-    }, [roomId, nickname, password, role, initialPlayers]);
+    }, [roomId, nickname, clientId, navigate]);
 
     const getMousePos = (canvas, evt) => {
         const rect = canvas.getBoundingClientRect();
@@ -103,11 +115,11 @@ const DrawingCanvas = () => {
         const pos = getMousePos(canvas, e);
         if (isErasing) {
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.lineWidth = brushSize * 5; // Eraser size is 5 times the brush size
+            ctx.lineWidth = brushSize * 5;
         } else {
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = color;
-            ctx.lineWidth = brushSize; // Use current brush size
+            ctx.lineWidth = brushSize;
         }
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
@@ -120,62 +132,61 @@ const DrawingCanvas = () => {
     const handleClear = () => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
 
     const handleConfirm = async () => {
-        if (keyword.trim()) {
-            const canvas = canvasRef.current;
-            const imageData = canvas.toDataURL('image/png');            
-
-            try {
-                // Upload the drawing to the server
-                const response = await fetch('http://localhost:3001/upload-drawing', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ roomId, imageData, keyword: keyword.trim() }),
-                });
-
-                if (response.ok) {                                           
-                    // Clear the canvas
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                     // Navigate to the judge page
-                    navigate(`/judge/${roomId}`, { 
-                        state: { 
-                            roomId, 
-                            password,
-                            nickname, 
-                            role: 'drawer', 
-                            keyword: keyword.trim() 
-                        } 
-                    });
-
-                    alert('Drawing and keyword submitted successfully');
-                } else {
-                    throw new Error('Fail to upload (1) ');
-                }
-            } catch (error) {
-                console.error('Error uploading image:', error);
-                alert('Fail to upload (2): ' + error.message);
-            }
-        }
-        else{
+        if (!keyword.trim()) {
             alert('Please enter a keyword');
+            return;
+        }
+
+        try {
+            const canvas = canvasRef.current;
+            // Convert the canvas to a Blob
+            const blob = await new Promise(resolve => {
+                canvas.toBlob(resolve, 'image/png');
+            });
+
+            // Upload the drawing
+            const uploadResult = await api.uploadDrawing(roomId, clientId, blob);
+            if (uploadResult.status !== 'success') {
+                throw new Error('Failed to upload drawing');
+            }
+
+            // Send the drawing and keyword to WebSocket
+            sendMessage({
+                event: 'submit_drawing',
+                roomId,
+                clientId,
+                drawingUrl: uploadResult.url,
+                keyword: keyword.trim()
+            });
+
+            // Navigate to the judge page
+            navigate(`/judge/${roomId}`, {
+                state: {
+                    roomId,
+                    password,
+                    nickname,
+                    clientId,
+                    role: 'drawer',
+                    keyword: keyword.trim()
+                }
+            });
+
+        } catch (error) {
+            console.error('Error uploading drawing:', error);
+            alert('Failed to upload drawing: ' + error.message);
         }
     };
-    
 
     return (
         <div className="game-container">
             <div className="canvas-container">
                 <h1>Draw as you like</h1>
                 {roomId && <p>Room ID: {roomId}</p>}
-                {password && <p>Password: {password}</p>}
                 <p>Round: {currentRound}/{totalRounds}</p>
                 <canvas
                     ref={canvasRef}
@@ -186,8 +197,8 @@ const DrawingCanvas = () => {
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
-                ></canvas>               
-                <div className="tools-container">                
+                ></canvas>
+                <div className="tools-container">
                     <input
                         type="color"
                         value={color}
@@ -204,7 +215,7 @@ const DrawingCanvas = () => {
                             value={brushSize}
                             onChange={(e) => setBrushSize(Number(e.target.value))}
                             className="brush-size-slider"
-                        />                        
+                        />
                     </div>
                     <button
                         className="canvas-button"
@@ -215,23 +226,28 @@ const DrawingCanvas = () => {
                     <button className="canvas-button" onClick={handleClear}>Clear</button>
                 </div>
                 <div className='sidebar'>
-                        <input
-                            type="text"
-                            value={keyword}
-                            onChange={(e) => setKeyword(e.target.value)}
-                            placeholder="Enter a keyword"
-                        />
-                </div>   
-                <button className="canvas-button" onClick={handleConfirm}>Submit</button>                            
+                    <input
+                        type="text"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        placeholder="Enter a keyword"
+                    />
+                </div>
+                <button className="canvas-button" onClick={handleConfirm}>Submit</button>
             </div>
             <div className="players-list">
                 <h3>Players({players.length})</h3>
                 <ul>
-                {players.map((player, index) => (
-                    <li key={index}>
-                        {player.nickname}{player.nickname === nickname ? ' (You)' : ''}                        
-                    </li>
-                ))}
+                    {players.map((player, index) => (
+                        <li key={index} className={`player-item ${player.isDrawing ? 'drawing' : ''}`}>
+                            <span>
+                                {player.nickname}
+                                {player.nickname === nickname ? ' (You)' : ''}
+                                {player.isDrawing ? ' (Drawing)' : ''}
+                            </span>
+                            <span className="player-score">Score: {player.score || 0}</span>
+                        </li>
+                    ))}
                 </ul>
             </div>
         </div>
