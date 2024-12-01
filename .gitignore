@@ -2,6 +2,7 @@
 /node_modules
 /.pnp
 .pnp.js
+/.conda
 
 # production
 /build
@@ -22,3 +23,7 @@ yarn-error.log*
 
 # Testing
 tests/
+
+# Python
+__pycache__
+/__pycache__
