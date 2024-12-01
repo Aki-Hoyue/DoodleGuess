@@ -1,155 +1,176 @@
-import React, { useRef, useLayoutEffect, useCallback, useState, useReducer } from 'react';
+import React, { useRef, useLayoutEffect, useCallback, useState, useReducer, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
-
-const socket = io('http://localhost:3001');
+import { connectWebSocket, sendMessage, addMessageHandler, removeMessageHandler, api } from './utils/websocket';
 
 const Viewer = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const [roomInfo, setRoomInfo] = useState(null);
     const [players, setPlayers] = useState([]);
-    const { roomId, password, nickname } = location.state || {};
+    const { roomId, password, nickname, clientId } = location.state || {};
 
-    // Use refs to store the judgment result and whether to show the judgment
+    // Use refs to store judgment results and display status
     const judgmentResultRef = useRef(null);
     const showJudgmentRef = useRef(false);
     const imageUrlRef = useRef('');
     const waitingForImageRef = useRef(true);
 
-    // State to force update the component
+    // Forcing the component to update
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-    // States to store the guess and submission status
     const [guess, setGuess] = useState('');
     const [hasGuessed, setHasGuessed] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentRound, setCurrentRound] = useState(1);
     const [totalRounds, setTotalRounds] = useState(1);
-    const [otherGuesses, setOtherGuesses] = useState({}); 
+    const [otherGuesses, setOtherGuesses] = useState({});
     const [isFinalRound, setIsFinalRound] = useState(false);
+    const [currentDrawing, setCurrentDrawing] = useState(null);
+    const [roundResults, setRoundResults] = useState(null);
+    const [showScoreBoard, setShowScoreBoard] = useState(false);
+    const [keyword, setKeyword] = useState('');
 
-    const handlePersonalJudgment = useCallback((result) => {
-        console.log('Received personal judgment:', result);
-        
+    const handlePersonalJudgment = useCallback((data) => {
         judgmentResultRef.current = {
-            aiJudgment: result.aiJudge,
-            aiReason: result.aiReason,
-            drawerJudgment: result.drawerJudge,
-            finalJudgment: (result.aiJudge === result.drawerJudge)
+            aiJudgment: data.ai_judgment,
+            aiReason: data.ai_reason,
+            drawerJudgment: data.drawer_judgment,
+            finalJudgment: data.final_judgment
         };
         showJudgmentRef.current = true;
-        
-        console.log('Updated refs:', {
-            judgmentResult: judgmentResultRef.current,
-            showJudgment: showJudgmentRef.current
-        });
-
         forceUpdate();
     }, []);
 
     useLayoutEffect(() => {
-        if (roomId && nickname) {
-            console.log(`Joining room ${roomId} with nickname ${nickname}`);
-            socket.emit('join room', { roomId, nickname, role: 'guesser' });
+        if (!roomId || !nickname || !clientId) {
+            navigate('/');
+            return;
         }
 
-        socket.on('room joined', (roomInfo) => {
-            console.log('Joined room:', roomInfo);
-            setRoomInfo(roomInfo);
-            setPlayers(roomInfo.players);
-            setCurrentRound(roomInfo.currentRound);
-            setTotalRounds(roomInfo.totalRounds);
-            if (roomInfo.imageUrl) {
-                imageUrlRef.current = roomInfo.imageUrl;
-                waitingForImageRef.current = false;
-                forceUpdate();
+        document.title = 'Viewer - DoodleGuess';
+
+        connectWebSocket(clientId);
+
+        const fetchGameState = async () => {
+            try {
+                const state = await api.getGameState(roomId);
+                setPlayers(state.players);
+                setCurrentRound(state.current_round);
+                setTotalRounds(state.total_rounds);
+                
+                // Get current drawing 
+                if (state.status != 'round_start') {
+                    const drawingData = await api.getDrawing(roomId);
+                    if (drawingData.status === 'success') {
+                        setCurrentDrawing(drawingData.url);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch game state:', error);
             }
-        });
-
-        socket.on('update players', (updatedPlayers) => {
-            console.log('Updated players:', updatedPlayers);
-            setPlayers(updatedPlayers);
-            forceUpdate();
-        });
-
-        socket.on('drawer left', () => {
-            alert('The drawer has left the room. Redirecting to the home page in 3s...');
-            setTimeout(() => {
-                navigate('/');
-            }, 3000);
-        });
-
-        socket.on('new drawing', ({ keyword, imageUrl }) => {
-            imageUrlRef.current = imageUrl;
-            waitingForImageRef.current = false;
-            setHasGuessed(false);  // Reset the guess status
-            forceUpdate();
-        });
-
-        socket.on('personal judgment', handlePersonalJudgment);
-
-        // Receive other players' guesses
-        socket.on('update guesses', (guesses) => {
-            setOtherGuesses(guesses);
-        });
-
-        socket.on('final round', () => {
-            setIsFinalRound(true);
-        });
-
-        // Omit leave room event when closing tab or browser
-        const handleBeforeUnload = () => {
-            socket.emit('leave room', { roomId, nickname });
         };
-    
-        window.addEventListener('beforeunload', handleBeforeUnload);
+        fetchGameState();
+
+        const handlers = {
+            'player_joined': (data) => {
+                setPlayers(data.players);
+            },
+            'player_left': (data) => {
+                setPlayers(data.players);
+                if (data.drawer_left) {
+                    alert('The drawer has left the room. Redirecting to the home page in 3s...');
+                    setTimeout(() => navigate('/'), 3000);
+                }
+            },
+            'new_drawing': (data) => {
+                setCurrentDrawing(data.drawingUrl);
+                setHasGuessed(false);
+                setGuess('');
+                setShowScoreBoard(false);
+            },
+            'judgment_result': handlePersonalJudgment,
+            'all_guessed': (data) => {
+                setOtherGuesses(data.guesses);
+            },
+            'round_start': (data) => {
+                console.log('Received round_start event:', data);
+                setCurrentRound(data.currentRound);
+                setTotalRounds(data.totalRounds);
+                if (data.currentRound === data.totalRounds) {
+                    setIsFinalRound(true);
+                }
+                // Clear current drawing and score display
+                setCurrentDrawing(null);
+                setShowScoreBoard(false);
+                setHasGuessed(false);
+                setGuess('');
+                // If it's a new drawer, navigate to the drawing page
+                const isDrawing = data.players.find(p => p.client_id === clientId)?.isDrawing;
+                if (isDrawing) {
+                    navigate(`/draw/${roomId}`, { 
+                        state: { 
+                            roomId,
+                            clientId,
+                            nickname,
+                            currentRound: data.currentRound,
+                            totalRounds: data.totalRounds,
+                            players: data.players
+                        }
+                    });
+                }
+            },
+            'round_end': (data) => {
+                setRoundResults(data);
+                setShowScoreBoard(true);
+                if (data.players) {
+                    setPlayers(data.players);
+                }
+                if (data.current_round) {
+                    setCurrentRound(data.current_round);
+                }
+                if (data.total_rounds) {
+                    setTotalRounds(data.total_rounds);
+                }
+            },
+            'player_ready_update': (data) => {
+                setPlayers(data.players);
+            },
+            'game_over': (data) => {
+                navigate('/game-over', {
+                    state: {
+                        players: data.players,
+                        finalScores: data.final_scores,
+                        nickname,
+                        clientId
+                    }
+                });
+            }
+        };
+
+        Object.entries(handlers).forEach(([event, handler]) => {
+            addMessageHandler(event, handler);
+        });
 
         return () => {
-            if (!window.location.pathname.includes('/draw') &&
-                !window.location.pathname.includes('/view') &&
-                !window.location.pathname.includes('/judge') &&
-                !window.location.pathname.includes('/waiting') &&
-                !window.location.pathname.includes('/game-over')) {
-                socket.emit('leave room', { roomId, nickname });
-            }
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            
-            socket.off('room joined');
-            socket.off('update players');
-            socket.off('new drawing');
-            socket.off('drawer left');
-            socket.off('personal judgment', handlePersonalJudgment);
+            Object.keys(handlers).forEach(event => {
+                removeMessageHandler(event);
+            });
         };
-    }, [roomId, nickname, handlePersonalJudgment, navigate]);
+    }, [roomId, nickname, clientId, totalRounds, handlePersonalJudgment, navigate]);
 
     const handleGuess = useCallback(async (e) => {
         e.preventDefault();
         const guessValue = guess.trim();
-        // Check if the guess is empty
         if (!guessValue) {
             alert('Please enter your guess');
             return;
         }
 
-        if (guessValue && !isSubmitting) {
+        if (!isSubmitting) {
             setIsSubmitting(true);
-            // Submit the guess to the server
             try {
-                const response = await fetch('http://localhost:3001/submit-guess', {
-                    method: 'POST',
-                    headers: {
-                        //'Accept': 'application/json',
-                        'Content-Type': 'application/json',                                               
-                    },
-                    body: JSON.stringify({ roomId, nickname, guess: guessValue }),
-                });
-
-                if (response.ok) {
+                const result = await api.submitGuess(roomId, clientId, guessValue);
+                if (result.status === 'success') {
                     setHasGuessed(true);
-                } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to submit guess');
                 }
             } catch (error) {
                 console.error('Error submitting guess:', error);
@@ -158,48 +179,123 @@ const Viewer = () => {
                 setIsSubmitting(false);
             }
         }
-    }, [roomId, nickname, guess, isSubmitting]);
+    }, [roomId, clientId, guess, isSubmitting]);
 
     const handleConfirmJudgment = useCallback(() => {
         setHasGuessed(false);
         setGuess('');
-        showJudgmentRef.current = false;  
-        imageUrlRef.current = '';  
-        waitingForImageRef.current = true;   
-        navigate(`/waiting/${roomId}`, { state: { roomId, nickname, role: 'guesser' } });
-    }, [roomId, nickname, navigate]);
+        showJudgmentRef.current = false;
+        imageUrlRef.current = '';
+        waitingForImageRef.current = true;
+        navigate(`/waiting/${roomId}`, {
+            state: {
+                roomId,
+                nickname,
+                clientId,
+                role: 'guesser'
+            }
+        });
+    }, [roomId, nickname, clientId, navigate]);
 
-    // Whether the player is the next drawer
     const isNextDrawer = useCallback(() => {
-        if (!roomInfo) return false;
-        const currentDrawerIndex = players.findIndex(p => p.role === 'drawer');
+        const currentDrawerIndex = players.findIndex(p => p.isDrawing);
         const nextDrawerIndex = (currentDrawerIndex + 1) % players.length;
-        return players[nextDrawerIndex].nickname === nickname;
-    }, [roomInfo, players, nickname]);
-
+        return players[nextDrawerIndex]?.nickname === nickname;
+    }, [players, nickname]);
 
     return (
         <div className="viewer">
             <div className="viewer-header">
                 <h2>Doodle Guess</h2>
                 <p>Room ID: {roomId}</p>
-                <p>Password: {password}</p>
                 <p>Round: {currentRound}/{totalRounds}</p>
             </div>
-            <div className="viewer-content">
+            <div className="viewer-header">
                 <div className="viewer-main">
-                    {waitingForImageRef.current ? (
+                    {!currentDrawing && !showScoreBoard ? (
                         <p>Waiting for the drawer to upload an image...</p>
+                    ) : showScoreBoard && roundResults ? (
+                        <div className="round-end">
+                            <h3>Round Result</h3>
+                            <div className="round-info">
+                                <p>Round {currentRound}/{totalRounds}</p>
+                                <p>Correct answer: {roundResults.keyword}</p>
+                            </div>
+                            <div className="judgments-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Player</th>
+                                            <th>Your Guess</th>
+                                            <th>Answer</th>
+                                            <th>Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {roundResults.judgments.map((judgment, index) => {
+                                            const player = players.find(p => p.client_id === judgment.player_id);
+                                            return (
+                                                <tr key={index} className={`judgment-row ${judgment.is_correct ? 'correct' : 'incorrect'}`}>
+                                                    <td className="player-name">{player?.nickname}</td>
+                                                    <td className="guess">{judgment.guess}</td>
+                                                    <td className="answer">{roundResults.keyword}</td>
+                                                    <td className={`result_${judgment.is_correct ? 'correct' : 'incorrect'}`}>
+                                                        {judgment.is_correct ? 'Correct' : 'Incorrect'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="scores">
+                                <h4>Current Scores</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Player</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {players.map((player, index) => (
+                                            <tr key={index} className={player.nickname === nickname ? 'current-player' : ''}>
+                                                <td>
+                                                    {player.nickname}
+                                                    {player.nickname === nickname ? ' (You)' : ''}
+                                                    {player.isDrawing ? ' (Next Drawer)' : ''}
+                                                </td>
+                                                <td>{player.score || 0}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {players.find(p => p.nickname === nickname)?.isDrawing && 
+                            <button 
+                                className="next-round-button"
+                                onClick={() => sendMessage({
+                                    event: 'player_ready',
+                                    roomId,
+                                    clientId
+                                })}
+                            >
+                                Ready for next round
+                            </button>
+                            }
+                            {(players.find(p => p.nickname === nickname)?.isDrawing) === false && 
+                            <p>Waiting for the next player to ready...</p>}
+                        </div>
                     ) : (
                         <>
-                            <img src={imageUrlRef.current} alt="Drawing" style={{ maxWidth: '100%' }} />
+                            <img src={currentDrawing} alt="Drawing" style={{ maxWidth: '100%' }} />
                             {!hasGuessed ? (
                                 <form onSubmit={handleGuess}>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={guess}
                                         onChange={(e) => setGuess(e.target.value)}
-                                        placeholder="Enter your guess" 
+                                        placeholder="Enter your guess"
                                         disabled={isSubmitting}
                                     />
                                     <button type="submit" disabled={isSubmitting}>
@@ -211,36 +307,19 @@ const Viewer = () => {
                             )}
                         </>
                     )}
-
-                    {showJudgmentRef.current && judgmentResultRef.current && (
-                        <div className="judgment-result">
-                            <h3>Final Result</h3>
-                            <p>Your Guess: {guess}</p>
-                            {roomInfo?.keyword && (<p>Keyword: {roomInfo.keyword}</p>)}
-                            <p>AI Judgment: {judgmentResultRef.current.aiJudgment ? 'Correct' : 'Incorrect'}</p>
-                            <p>AI Reasoning: {judgmentResultRef.current.aiReason}</p>
-                            <p>Drawer Judgment: {judgmentResultRef.current.drawerJudgment ? 'Approve AI judgement' : 'Reject AI judgement'}</p>
-                            <p>Final Result: {judgmentResultRef.current.finalJudgment ? 'Correct' : 'Incorrect'}</p>
-                            <h4>Other Players' Guesses:</h4>
-                            <ul>
-                                {Object.entries(otherGuesses)
-                                    .filter(([playerNickname]) => playerNickname !== nickname)
-                                    .map(([playerNickname, playerGuess], index) => (
-                                        <li key={index}>{playerNickname}: {playerGuess}</li>
-                                    ))
-                                }
-                            </ul>
-                            {isFinalRound && <p className="next-alert">This is the final round!</p>}
-                            {!isFinalRound && isNextDrawer() && <p className="next-alert">You are the next drawer!</p>}
-                            <button onClick={handleConfirmJudgment}>Confirm and Continue</button>
-                        </div>
-                    )}
                 </div>
                 <div className="players-list">
                     <h3>Players({players.length})</h3>
                     <ul>
                         {players.map((player, index) => (
-                            <li key={index}>{player.nickname}{player.nickname === nickname ? ' (You)' : ''}{player.role === 'drawer' ? ' (Drawer)' : ''}</li>
+                            <li key={index} className={`player-item ${player.isDrawing ? 'drawing' : ''}`}>
+                                <span>
+                                    {player.nickname}
+                                    {player.nickname === nickname ? ' (You)' : ''}
+                                    {player.isDrawing ? ' (Drawing)' : ''}
+                                </span>
+                                <span className="player-score">Score: {player.score || 0}</span>
+                            </li>
                         ))}
                     </ul>
                 </div>
