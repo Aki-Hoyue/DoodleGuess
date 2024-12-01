@@ -7,7 +7,6 @@ import Judge from './Judge';
 import Waiting from './Waiting';
 import GameOver from './GameOver';
 
-// 滚动恢复组件
 function ScrollToTop() {
   const { pathname } = useLocation();
 
@@ -18,10 +17,14 @@ function ScrollToTop() {
   return null;
 }
 
-// 主App组件
 function App() {
   return (
-    <Router>
+    <Router
+      future={{ 
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}
+    >
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<RoomManagement />} />
