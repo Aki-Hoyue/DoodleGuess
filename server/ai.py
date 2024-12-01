@@ -100,6 +100,7 @@ async def judge_guesses(user_answer: str, guesser_answer: List[str], max_retries
     1. For different reference answers, their is no memory between them.
     2. Your answer is structured that must follow the <OutputFormat>, do not include any other information.
     3. your reason response must match the language of the reference answer.
+    4. The number of judgments in dictionary must be equal to the number of input answers.
     """
 
     last_error = None
