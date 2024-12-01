@@ -1,40 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
-
-const socket = io('http://localhost:3001');
-
+import { connectWebSocket, sendMessage } from './utils/websocket';
 
 const GameOver = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { playerScores, nickname } = location.state || {};
+    const { players, nickname, clientId } = location.state || {};
+
+    useEffect(() => {
+        if (!players || !nickname || !clientId) {
+            navigate('/');
+            return;
+        }
+        document.title = 'Game Over';
+    }, [players, nickname, clientId, navigate]);
+
+    // Calculate and sort player scores
+    const sortedPlayers = [...(players || [])].sort((a, b) => b.score - a.score);
+    const currentPlayer = players?.find(p => p.nickname === nickname);
 
     return (
         <div className="game-over">
             <h2>Game Over</h2>
             <div className="scores">
                 <h3>Your Score:</h3>
-                {playerScores[nickname] && (
-                    <div>
-                        <h4>{nickname}</h4>
-                        <p>Correct Guesses: {playerScores[nickname].correctGuesses}</p>
-                        <p>Drawings Guessed Correctly: {playerScores[nickname].drawingsGuessedCorrectly}</p>
+                {currentPlayer && (
+                    <div className="player-score">
+                        <h4>{currentPlayer.nickname}</h4>
+                        <p>Score: {currentPlayer.score}</p>
+                        <p>Correct Guesses: {currentPlayer.correct_guesses || 0}</p>
+                        <p>Drawings Guessed Correctly: {currentPlayer.drawings_guessed_correctly || 0}</p>
                     </div>
                 )}
-                <h3>Other Players' Scores:</h3>
-                {Object.entries(playerScores)
-                    .filter(([player]) => player !== nickname) // Filter out the current player
-                    .map(([player, score]) => (
-                        <div key={player}>
-                            <h4>{player}</h4>
-                            <p>Correct Guesses: {score.correctGuesses}</p>
-                            <p>Drawings Guessed Correctly: {score.drawingsGuessedCorrectly}</p>
+                <h3>Final Rankings:</h3>
+                <div className="rankings">
+                    {sortedPlayers.map((player, index) => (
+                        <div key={player.client_id} className={`player-rank ${player.nickname === nickname ? 'current-player' : ''}`}>
+                            <h4>#{index + 1} - {player.nickname} {player.nickname === nickname ? '(You)' : ''}</h4>
+                            <p>Score: {player.score}</p>
+                            <p>Correct Guesses: {player.correct_guesses || 0}</p>
+                            <p>Drawings Guessed Correctly: {player.drawings_guessed_correctly || 0}</p>
                         </div>
-                    ))
-                }
+                    ))}
+                </div>
             </div>
-            <button onClick={() => navigate('/')}>Return to Homepage</button>
+            <button className="return-button" onClick={() => navigate('/')}>
+                Return to Homepage
+            </button>
         </div>
     );
 };
