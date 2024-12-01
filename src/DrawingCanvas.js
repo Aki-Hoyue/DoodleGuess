@@ -84,7 +84,6 @@ const DrawingCanvas = () => {
             if (!window.location.pathname.includes('/draw') &&
                 !window.location.pathname.includes('/view') &&
                 !window.location.pathname.includes('/judge') &&
-                !window.location.pathname.includes('/waiting') &&
                 !window.location.pathname.includes('/game-over')) {
                 handleBeforeUnload();
             }

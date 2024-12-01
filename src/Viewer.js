@@ -181,22 +181,6 @@ const Viewer = () => {
         }
     }, [roomId, clientId, guess, isSubmitting]);
 
-    const handleConfirmJudgment = useCallback(() => {
-        setHasGuessed(false);
-        setGuess('');
-        showJudgmentRef.current = false;
-        imageUrlRef.current = '';
-        waitingForImageRef.current = true;
-        navigate(`/waiting/${roomId}`, {
-            state: {
-                roomId,
-                nickname,
-                clientId,
-                role: 'guesser'
-            }
-        });
-    }, [roomId, nickname, clientId, navigate]);
-
     const isNextDrawer = useCallback(() => {
         const currentDrawerIndex = players.findIndex(p => p.isDrawing);
         const nextDrawerIndex = (currentDrawerIndex + 1) % players.length;
