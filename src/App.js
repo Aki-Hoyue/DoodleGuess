@@ -4,7 +4,6 @@ import DrawingCanvas from './DrawingCanvas';
 import Viewer from './Viewer';
 import RoomManagement from './RoomManagement';
 import Judge from './Judge';
-import Waiting from './Waiting';
 import GameOver from './GameOver';
 
 function ScrollToTop() {
@@ -40,9 +39,6 @@ function App() {
             path="/judge/:roomId" 
             element={<Judge key={window.location.pathname}/>} 
           />
-          <Route 
-            path="/waiting/:roomId" 
-            element={<Waiting key={window.location.pathname} />} />
           <Route 
             path="/game-over" 
             element={<GameOver key={window.location.pathname} />} />
