@@ -1,85 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { connectWebSocket, sendMessage, addMessageHandler, removeMessageHandler } from './utils/websocket';
+import { v4 as uuidv4 } from 'uuid';
 import './style.css';
-
-const socket = io('http://localhost:3001');
 
 const RoomManagement = () => {
     const [roomId, setRoomId] = useState('');
     const [password, setPassword] = useState('');
     const [createPassword, setCreatePassword] = useState('');
-    const [painterNickname, setPainterNickname] = useState(''); // Nickname of the creator
-    const [viewerNickname, setViewerNickname] = useState(''); // Nickname of the new joiner
-    const [maxPlayers, setMaxPlayers] = useState(3); // Maximum number of players
-    const [rounds, setRounds] = useState(1); // Number of rounds
+    const [painterNickname, setPainterNickname] = useState('');
+    const [viewerNickname, setViewerNickname] = useState('');
+    const [maxPlayers, setMaxPlayers] = useState(3);
+    const [rounds, setRounds] = useState(3);
+    const [clientId] = useState(() => uuidv4());
     const navigate = useNavigate();
 
     useEffect(() => {
-        console.log('RoomManagement 组件已挂载');
+        document.title = 'DoodleGuess';
 
-        socket.on('room created', ({ roomId, players, drawer }) => {
-            console.log(`Room created with ID: ${roomId}, players:`, players);
-            navigate(`/draw/${roomId}`, { 
-                state: { 
-                    roomId, 
-                    password: createPassword,  
-                    nickname: painterNickname, 
-                    maxPlayers,
-                    role: 'drawer',
-                    players: players
-                } 
+        // Connect to WebSocket
+        connectWebSocket(clientId);
+
+        addMessageHandler('room_created', (data) => {
+            console.log('Room created with ID:', data.roomId);
+            navigate(`/draw/${data.roomId}`, {
+                state: {
+                    roomId: data.roomId,
+                    password: createPassword,
+                    nickname: painterNickname,
+                    clientId: clientId,
+                    role: 'drawer'
+                }
+            });
+        });
+
+        addMessageHandler('error', (data) => {
+            alert(data.message);
+        });
+
+        addMessageHandler('player_joined', (data) => {
+            navigate(`/view/${roomId}`, {
+                state: {
+                    roomId,
+                    password,
+                    nickname: viewerNickname,
+                    clientId: clientId,
+                    role: 'guesser'
+                }
             });
         });
 
         return () => {
-            socket.off('room created');
+            removeMessageHandler('room_created');
+            removeMessageHandler('error');
+            removeMessageHandler('player_joined');
         };
-    }, [createPassword, painterNickname, maxPlayers, navigate]);
+    }, [clientId, createPassword, painterNickname, roomId, password, viewerNickname, navigate]);
 
-    const handleCreateRoom = async () => {
-        if (createPassword && painterNickname) {
-            console.log(`Creating room with nickname ${painterNickname}`);
-            socket.emit('create room', { 
-                password: createPassword,
-                maxPlayers, 
-                rounds,
-                creatorNickname: painterNickname 
-            });
-        } else {
+    const handleCreateRoom = () => {
+        if (!createPassword || !painterNickname) {
             alert('Password and Nickname are required');
+            return;
         }
+
+        console.log('Creating room with data:', {
+            event: 'create_room',
+            password: createPassword,
+            maxPlayers,
+            rounds,
+            creatorNickname: painterNickname,
+            clientId
+        });
+
+        sendMessage({
+            event: 'create_room',
+            password: createPassword,
+            maxPlayers,
+            rounds,
+            creatorNickname: painterNickname,
+            clientId
+        });
     };
 
     const handleJoinRoom = () => {
-        if (roomId && password && viewerNickname) {
-            socket.emit('check password and nickname', { roomId, password, nickname: viewerNickname });
-            
-            socket.on('incorrect password', () => {
-                alert('Incorrect password.');
-            });
-
-            socket.on('duplicate nickname', () => {
-                alert('Nickname already taken.');
-            });    
-
-            socket.on('password and nickname valid', () => {
-
-                console.log(`Joining room ${roomId} with nickname ${viewerNickname}`);
-                socket.emit('join room', { roomId, nickname: viewerNickname, role: 'guesser' });
-
-                socket.on('room full', () => {
-                    alert('The room is full.');
-                });
-
-                socket.on('room joined', (roomInfo) => {
-                    console.log('Joined room:', roomInfo);
-                    navigate(`/view/${roomId}`, { state: { roomId, password, nickname: viewerNickname } });
-                });
-            });
-        } else {
+        if (!roomId || !password || !viewerNickname) {
             alert('Please enter both Room ID, Password and Nickname');
-        }          
+            return;
+        }
+
+        console.log('Joining room with data:', {
+            event: 'join_room',
+            roomId,
+            password,
+            nickname: viewerNickname,
+            clientId
+        });
+
+        sendMessage({
+            event: 'join_room',
+            roomId,
+            password,
+            nickname: viewerNickname,
+            clientId
+        });
     };
 
     return (
@@ -104,7 +127,7 @@ const RoomManagement = () => {
                     value={maxPlayers}
                     onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
                 >
-                    {[3, 4, 5, 6, 7, 8].map(num => (
+                    {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                         <option key={num} value={num}>{num}</option>
                     ))}
                 </select>
@@ -112,13 +135,13 @@ const RoomManagement = () => {
             <label className="rounds-label">
                 Rounds:
                 <select
-                id="rounds"
-                value={rounds}
-                onChange={(e) => setRounds(parseInt(e.target.value))}
+                    id="rounds"
+                    value={rounds}
+                    onChange={(e) => setRounds(parseInt(e.target.value))}
                 >
-                {[1, 2, 3, 4, 5].map(num => (
-                    <option key={num} value={num}>{num}</option>
-                ))}
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                        <option key={num} value={num}>{num}</option>
+                    ))}
                 </select>
             </label>
             <button onClick={handleCreateRoom}>Create Room</button>
@@ -140,7 +163,7 @@ const RoomManagement = () => {
                 value={viewerNickname}
                 onChange={(e) => setViewerNickname(e.target.value)}
                 placeholder="Enter your nickname"
-            />            
+            />
             <button onClick={handleJoinRoom}>Join Room</button>
         </div>
     );
