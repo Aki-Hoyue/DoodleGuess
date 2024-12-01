@@ -4,23 +4,34 @@ html, body {
   background-color: #f0f0f0;
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow-x: hidden;
 }
+
+#root {
+  min-height: 100%;
+  background-color: #f0f0f0;
+}
+
 h2 {
   color: #333;
   text-align: center;
   margin-top: 20px;
 }
+
 h3 {
   color: #555;
   margin-bottom: 10px;
 }
+
 div {
-  background-color: #fff;
+  background-color: #ffffff;
   border-radius: 8px;
-  margin: 0px auto;
+  margin: 0 auto;
   padding: 10px;
   max-width: 800px;
 }
+
 button {
   background-color: #007bff;
   border: none;
@@ -32,9 +43,11 @@ button {
   margin: 10px;
   display: inline-block;
 }
+
 button:hover {
   background-color: #0056b3;
 }
+
 input[type="color"] {
   margin: 10px;
   padding: 5px;
@@ -45,13 +58,16 @@ input[type="color"] {
   width: 40px;
   height: 40px;
 }
+
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;
 }
+
 input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
 }
+
 input {
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -59,10 +75,12 @@ input {
   width: calc(100% - 22px);
   margin-bottom: 10px;
 }
+
 p {
   color: #007bff;
   font-weight: bold;
 }
+
 .main-container {
   display: flex;
   flex-direction: column;
@@ -70,17 +88,26 @@ p {
   width: 100%;
   max-width: 800px;
   padding: 20px;
+  margin: 0 auto;
 }
+
 canvas {
   max-width: 100%;
   height: auto;
 }
+
 .game-container {
   display: flex;
   justify-content: space-between;
-  padding: 0px;
+  padding: 20px;
   box-sizing: border-box;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
 }
+
 .canvas-container {
   display: flex;
   flex-direction: column;
@@ -89,9 +116,10 @@ canvas {
   max-width: 800px;
   margin-left: 10px;
 }
+
 .tools-container {
   display: flex;
-  justify-content: flex-start; 
+  justify-content: flex-start;
   align-items: center;
   width: 100%;
   max-width: 700px;
@@ -103,7 +131,7 @@ canvas {
 }
 
 .brush-size-slider {
-  width: 200px; /* 减小滑动条宽度 */
+  width: 200px;
 }
 
 .brush-size-value {
@@ -122,26 +150,30 @@ canvas {
   flex-grow: 1;
   margin-right: 10px;
 }
+
 .button-container {
   display: flex;
   justify-content: flex-start;
   margin-top: 0px;
-  background-color: transparent; /* 设置背景透明 */
-  border: none; /* 无边框 */
+  background-color: transparent;
+  border: none;
 }
+
 .sidebar {
   width: 100%;
   max-width: 600px;
-  margin-top: 0px; /* Reduce top margin to decrease space */
+  margin-top: 0px;
   display: flex;
   justify-content: center;
 }
+
 .max-players-label {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
   width: 100%;
 }
+
 .max-players-label select {
   margin-left: 10px;
   flex: 1;
@@ -150,12 +182,14 @@ canvas {
   border-radius: 4px;
   width: calc(100% - 32px);
 }
+
 .rounds-label {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
   width: 100%;
 }
+
 .rounds-label select {
   margin-left: 10px;
   flex: 1;
@@ -164,6 +198,7 @@ canvas {
   border-radius: 4px;
   width: calc(100% - 32px);
 }
+
 .judge-actions {
   display: flex;
   justify-content: flex-start;
@@ -214,15 +249,16 @@ canvas {
   margin-bottom: 20px;
 }
 
-.viewer-content {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-}
-
 .viewer-main {
   flex: 3;
   padding: 20px;
+}
+
+.next-alert {
+  color: #ff0000;
+  font-weight: bold;
+  font-size: 18px;
+  margin-top: 10px;
 }
 
 .players-list {
@@ -250,10 +286,495 @@ canvas {
   margin-bottom: 10px;
 }
 
-.next-alert {
-  color: #ff0000; /* 红色字体 */
-  font-weight: bold; /* 加粗 */
-  font-size: 18px; /* 字体大小 */
-  margin-top: 10px; /* 上边距 */
+/* GameOver styles */
+.game-over {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
 }
+
+.scores {
+    margin: 20px 0;
+}
+
+.player-score {
+    background-color: #f0f0f0;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.rankings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.player-rank {
+    background-color: #f5f5f5;
+    padding: 15px;
+    border-radius: 8px;
+    transition: transform 0.2s;
+}
+
+.player-rank:hover {
+    transform: scale(1.02);
+}
+
+.current-player {
+    background-color: #e3f2fd;
+    border: 2px solid #2196f3;
+}
+
+.judge-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+
+
+.players-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.players-list li {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.waiting-ai {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  margin: 20px 0;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.manual-judge {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.manual-judge-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 15px 0;
+  padding: 15px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.guess-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.player-name {
+  font-weight: bold;
+  min-width: 100px;
+}
+
+.guess {
+  flex: 1;
+  color: #666;
+}
+
+.ai-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9em;
+  padding: 5px 0;
+}
+
+.suggestion {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.suggestion.correct {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.suggestion.incorrect {
+  background-color: #fbe9e7;
+  color: #c62828;
+}
+
+.reason {
+  color: #666;
+  font-style: italic;
+}
+
+.judge-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.judge-buttons button {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.judge-buttons button:hover {
+  background-color: #f5f5f5;
+}
+
+.judge-buttons button.selected {
+  background-color: #2196f3;
+  color: white;
+  border-color: #2196f3;
+}
+
+.submit-judgments {
+  width: 100%;
+  padding: 12px;
+  margin-top: 20px;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.submit-judgments:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.submit-judgments:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.error-message {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  color: #c62828;
+}
+
+/* Round end styles */
+.round-end {
+  margin: 20px 0;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.round-info {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.judgments-results {
+  margin: 20px 0;
+}
+
+.judgment-result {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 4px;
+  background-color: #fff;
+  border: 1px solid #eee;
+}
+
+.judgment-result.correct {
+  border-left: 4px solid #4caf50;
+}
+
+.judgment-result.incorrect {
+  border-left: 4px solid #f44336;
+}
+
+.result {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.correct .result {
+  color: white;
+}
+
+.incorrect .result {
+  background-color: #f44336;
+  color: white;
+}
+
+.scores {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.player-score {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.next-round-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.next-round-button:hover {
+  background-color: #1976d2;
+}
+
+.judgments-table {
+  margin: 20px 0;
+  overflow-x: auto;
+}
+
+.judgments-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.judgments-table th,
+.judgments-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.judgments-table th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  color: #333;
+}
+
+.judgments-table .player-name {
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.judgments-table .guess {
+  color: #666;
+}
+
+.judgments-table .ai-judgment {
+  font-weight: bold;
+}
+
+.judgments-table .ai-judgment.correct {
+  color: #4caf50;
+}
+
+.judgments-table .ai-judgment.incorrect {
+  color: #f44336;
+}
+
+.judgments-table .reason {
+  color: #666;
+  font-style: italic;
+  max-width: 300px;
+  white-space: normal;
+}
+
+.judgment-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.judgment-buttons button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.correct-button {
+  background-color: #e8f5e9;
+  color: #4caf50;
+}
+
+.correct-button:hover,
+.correct-button.selected {
+  background-color: #4caf50;
+  color: white;
+}
+
+.incorrect-button {
+  background-color: #fbe9e7;
+  color: #f44336;
+}
+
+.incorrect-button:hover,
+.incorrect-button.selected {
+  background-color: #f44336;
+  color: white;
+}
+
+/* Viewer page styles */
+.judgments-table {
+  margin: 20px 0;
+  overflow-x: auto;
+}
+
+.judgments-table table,
+.scores table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.judgments-table th,
+.judgments-table td,
+.scores th,
+.scores td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.judgments-table th,
+.scores th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  color: #333;
+}
+
+.judgment-row {
+  transition: background-color 0.2s;
+}
+
+.judgment-row:hover {
+  background-color: #f8f9fa;
+}
+
+.judgment-row.correct {
+  background-color: #e8f5e9;
+}
+
+.judgment-row.incorrect {
+  background-color: #fbe9e7;
+}
+
+.judgment-row .player-name {
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.judgment-row .guess {
+  color: #666;
+}
+
+.judgment-row .result {
+  font-weight: bold;
+}
+
+.judgment-row .result.correct {
+  color: #4caf50;
+}
+
+.judgment-row .result.incorrect {
+  color: #f44336;
+}
+
+.judgment-row .result_correct {
+  color: #4caf50;
+}
+
+.judgment-row .result_incorrect {
+  color: #f44336;
+}
+
+.scores table {
+  margin-top: 10px;
+}
+
+.scores tr.current-player {
+  background-color: #e3f2fd;
+}
+
+.scores tr:hover {
+  background-color: #f5f5f5;
+}
+
+.round-info {
+  text-align: center;
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 1.1em;
+}
+
+.round-info p {
+  margin: 5px 0;
+}
+
+.round-info p:last-child {
+  font-weight: bold;
+  color: #2196f3;
+}
+
 
