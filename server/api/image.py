@@ -36,7 +36,7 @@ async def upload_drawing(
     return {
         "status": "success",
         "filename": filename,
-        "url": f"/api/image/static/{filename}"
+        "url": f"/images/{filename}"
     }
 
 @router.get("/get-drawing/{room_id}")
@@ -52,6 +52,6 @@ async def get_drawing(room_id: str):
     return {
         "status": "success",
         "filename": latest_file,
-        "url": f"/api/image/static/{latest_file}"
+        "url": f"/images/{latest_file}"
     }
 
