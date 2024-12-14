@@ -1,5 +1,5 @@
 # DoodleGuess
-English | [中文](https://github.com/Aki-Hoyue/DoodleGuess/blob/main/README_cn.md)
+English | [中文](https://github.com/Aki-Hoyue/DoodleGuess/blob/main/README_cn.md)    
 DoodleGuess is an online multiplayer drawing and guessing game powered by **AI judgment**. Players create or join rooms to play, where one player draws while others guess. The game utilizes AI technology for guess evaluation, with final confirmation from the drawer.
 
 ## Key Features

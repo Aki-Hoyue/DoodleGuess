@@ -1,5 +1,5 @@
 # DoodleGuess
-[English](https://github.com/Aki-Hoyue/DoodleGuess/blob/main/README.md) | 中文
+[English](https://github.com/Aki-Hoyue/DoodleGuess/blob/main/README.md) | 中文    
 DoodleGuess 是一个基于 AI 判定的在线多人绘画猜谜游戏。玩家通过创建或加入房间进行游戏，每回合由一名玩家进行绘画，其他玩家根据绘画内容进行猜测。游戏使用 AI 技术对猜测进行评判, 并由绘画者进行最终确认。
 
 ## 主要功能
