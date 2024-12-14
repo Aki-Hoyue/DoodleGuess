@@ -30,10 +30,10 @@ const Judge = () => {
 
         document.title = 'Judgment - DoodleGuess';
 
-        // 连接WebSocket
+        // Connect to WebSocket
         connectWebSocket(clientId);
 
-        // 获取初始游戏状态
+        // Fetch game state
         const fetchGameState = async () => {
             try {
                 const state = await api.getGameState(roomId);
@@ -42,7 +42,7 @@ const Judge = () => {
                 setTotalRounds(state.total_rounds);
                 setKeyword(state.keyword);
 
-                // 获取当前绘画
+                // Get the drawing image
                 const drawingData = await api.getDrawing(roomId);
                 if (drawingData.status === 'success') {
                     setImageUrl(`/images/${drawingData.filename}`);
@@ -53,12 +53,11 @@ const Judge = () => {
         };
         fetchGameState();
 
-        // 添加事件处理器
+        // Event handlers
         const handlers = {
             'all_guessed': (data) => {
                 setIsWaitingAI(true);
                 setGuesses(data.guesses);
-                // 触发AI判断
                 sendMessage({
                     event: 'request_ai_judgment',
                     roomId,
@@ -74,7 +73,7 @@ const Judge = () => {
                 setShowManualJudge(true);
                 setAiError(null);
                 
-                // 预填充AI的判断结果
+                // pre-fill ai judgments
                 const initialJudgments = {};
                 data.judgments.forEach(judgment => {
                     initialJudgments[judgment.player_id] = judgment.is_correct;
@@ -104,7 +103,7 @@ const Judge = () => {
                 }
             },
             'round_start': (data) => {
-                console.log('Received round_start event:', data);  // 添加日志
+                console.log('Received round_start event:', data);
                 setCurrentRound(data.currentRound);
                 setTotalRounds(data.totalRounds);
                 const isDrawing = data.players.find(p => p.client_id === clientId)?.isDrawing;
@@ -147,12 +146,12 @@ const Judge = () => {
             }
         };
 
-        // 注册所有事件处理器
+        // register handlers
         Object.entries(handlers).forEach(([event, handler]) => {
             addMessageHandler(event, handler);
         });
 
-        // 清理函数
+        // cleanup
         return () => {
             Object.keys(handlers).forEach(event => {
                 removeMessageHandler(event);
@@ -160,7 +159,7 @@ const Judge = () => {
         };
     }, [navigate, roomId, clientId, nickname, keyword]);
 
-    // 处理手动判断
+    // manual judgment
     const handleManualJudgment = (playerId, isCorrect) => {
         setManualJudgments(prev => ({
             ...prev,
@@ -168,7 +167,7 @@ const Judge = () => {
         }));
     };
 
-    // 提交判断结果
+    // submit judgments
     const submitJudgments = () => {
         const judgmentsList = Object.entries(manualJudgments).map(([playerId, isCorrect]) => ({
             player_id: playerId,

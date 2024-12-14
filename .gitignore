@@ -3,6 +3,7 @@
 /.pnp
 .pnp.js
 /.conda
+/.venv
 
 # production
 /build
